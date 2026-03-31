@@ -1,0 +1,710 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>2026 MLB Futures Dashboard</title>
+<style>
+  :root {
+    --bg: #0f0f0f;
+    --bg2: #181818;
+    --bg3: #222222;
+    --bg4: #2a2a2a;
+    --border: rgba(255,255,255,0.08);
+    --border2: rgba(255,255,255,0.14);
+    --text: #f0ede8;
+    --text2: #9a9690;
+    --text3: #5a5754;
+    --amber: #e8a928;
+    --amber-bg: rgba(232,169,40,0.1);
+    --amber-dim: rgba(232,169,40,0.5);
+    --green: #4caf7a;
+    --green-bg: rgba(76,175,122,0.1);
+    --red: #e05252;
+    --red-bg: rgba(224,82,82,0.1);
+    --blue: #4f9cf0;
+    --blue-bg: rgba(79,156,240,0.1);
+    --font: 'Inter', system-ui, -apple-system, sans-serif;
+    --mono: 'JetBrains Mono', 'Fira Mono', monospace;
+    --radius: 8px;
+    --radius-lg: 12px;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { background: var(--bg); color: var(--text); font-family: var(--font); font-size: 14px; min-height: 100vh; }
+
+  /* TOP NAV */
+  .topnav { background: var(--bg2); border-bottom: 1px solid var(--border); padding: 0 24px; display: flex; align-items: center; gap: 0; position: sticky; top: 0; z-index: 50; }
+  .topnav .logo { font-size: 15px; font-weight: 600; color: var(--text); letter-spacing: -.02em; padding: 16px 0; margin-right: 32px; white-space: nowrap; }
+  .topnav .logo span { color: var(--amber); }
+  .nav-tabs { display: flex; gap: 0; }
+  .nav-tab { font-size: 13px; padding: 18px 16px; border: none; background: none; color: var(--text2); cursor: pointer; border-bottom: 2px solid transparent; transition: color .15s; white-space: nowrap; }
+  .nav-tab:hover { color: var(--text); }
+  .nav-tab.on { color: var(--amber); border-bottom-color: var(--amber); font-weight: 500; }
+
+  /* LAYOUT */
+  .page { display: none; padding: 24px; max-width: 1200px; margin: 0 auto; }
+  .page.on { display: block; }
+
+  /* METRICS ROW */
+  .metrics { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px,1fr)); gap: 10px; margin-bottom: 20px; }
+  .metric { background: var(--bg2); border: 1px solid var(--border); border-radius: var(--radius); padding: 14px 16px; }
+  .metric-label { font-size: 11px; color: var(--text3); text-transform: uppercase; letter-spacing: .06em; margin-bottom: 6px; }
+  .metric-value { font-size: 22px; font-weight: 600; color: var(--text); }
+  .metric-value.green { color: var(--green); }
+  .metric-value.red { color: var(--red); }
+  .metric-value.amber { color: var(--amber); }
+
+  /* CONTROLS */
+  .controls { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 14px; align-items: center; }
+  .controls input, .controls select {
+    font-size: 13px; padding: 7px 11px; height: 34px; border-radius: var(--radius);
+    border: 1px solid var(--border2); background: var(--bg2); color: var(--text);
+    font-family: var(--font); outline: none;
+  }
+  .controls input { width: 200px; }
+  .controls input:focus, .controls select:focus { border-color: var(--amber); }
+  .add-btn {
+    margin-left: auto; font-size: 13px; padding: 7px 16px; height: 34px; border-radius: var(--radius);
+    border: 1px solid var(--border2); background: var(--bg2); color: var(--amber);
+    cursor: pointer; font-family: var(--font); font-weight: 500; white-space: nowrap;
+    transition: background .15s;
+  }
+  .add-btn:hover { background: var(--amber-bg); }
+
+  /* TABLE */
+  .tbl-wrap { border: 1px solid var(--border); border-radius: var(--radius-lg); overflow: hidden; overflow-x: auto; }
+  table { width: 100%; border-collapse: collapse; font-size: 13px; min-width: 700px; }
+  thead th {
+    text-align: left; padding: 9px 13px; font-size: 11px; font-weight: 500;
+    color: var(--text3); background: var(--bg2); border-bottom: 1px solid var(--border);
+    white-space: nowrap; cursor: pointer; user-select: none; text-transform: uppercase; letter-spacing: .05em;
+  }
+  thead th:hover { color: var(--text2); }
+  tbody tr { border-bottom: 1px solid var(--border); transition: background .1s; }
+  tbody tr:last-child { border-bottom: none; }
+  tbody tr:hover { background: var(--bg3); }
+  tbody td { padding: 8px 13px; }
+
+  .market-tag {
+    font-size: 11px; padding: 2px 8px; border-radius: 99px;
+    background: var(--blue-bg); color: var(--blue); white-space: nowrap; font-weight: 500;
+  }
+  .odds { font-weight: 600; font-family: var(--mono); font-size: 12px; color: var(--amber); }
+  .mono { font-family: var(--mono); font-size: 12px; color: var(--text2); }
+  .win-amt { font-weight: 600; font-family: var(--mono); font-size: 12px; color: var(--green); }
+  .status-btn {
+    font-size: 11px; padding: 3px 10px; border-radius: 99px; border: none;
+    cursor: pointer; font-weight: 600; font-family: var(--font); transition: opacity .15s;
+  }
+  .status-btn:hover { opacity: 0.8; }
+  .status-pending { background: rgba(154,150,144,0.15); color: var(--text2); }
+  .status-win { background: var(--green-bg); color: var(--green); }
+  .status-loss { background: var(--red-bg); color: var(--red); }
+  .del-btn {
+    font-size: 12px; color: var(--text3); background: none; border: none;
+    cursor: pointer; padding: 3px 6px; border-radius: 4px; transition: color .1s;
+  }
+  .del-btn:hover { color: var(--red); }
+  .no-results { padding: 2.5rem; text-align: center; color: var(--text3); font-size: 13px; }
+
+  /* MODAL */
+  .modal-bg {
+    display: none; position: fixed; inset: 0;
+    background: rgba(0,0,0,0.7); z-index: 200;
+    align-items: center; justify-content: center;
+  }
+  .modal-bg.open { display: flex; }
+  .modal {
+    background: var(--bg2); border: 1px solid var(--border2);
+    border-radius: var(--radius-lg); padding: 24px; width: 100%; max-width: 460px; margin: 0 16px;
+  }
+  .modal h3 { font-size: 16px; font-weight: 600; margin-bottom: 18px; color: var(--text); }
+  .form-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+  .form-grid .full { grid-column: 1 / -1; }
+  .form-group { display: flex; flex-direction: column; gap: 5px; }
+  .form-group label { font-size: 11px; color: var(--text3); text-transform: uppercase; letter-spacing: .05em; }
+  .form-group input, .form-group select {
+    font-size: 13px; padding: 8px 11px; border-radius: var(--radius);
+    border: 1px solid var(--border2); background: var(--bg3); color: var(--text); font-family: var(--font); outline: none;
+  }
+  .form-group input:focus, .form-group select:focus { border-color: var(--amber); }
+  .modal-actions { display: flex; gap: 8px; justify-content: flex-end; margin-top: 20px; }
+  .modal-actions button {
+    font-size: 13px; padding: 8px 18px; border-radius: var(--radius);
+    border: 1px solid var(--border2); background: var(--bg3); color: var(--text2);
+    cursor: pointer; font-family: var(--font); transition: background .15s;
+  }
+  .modal-actions button:hover { background: var(--bg4); }
+  .modal-actions .save-btn { background: var(--amber); color: #0f0f0f; border-color: var(--amber); font-weight: 600; }
+  .modal-actions .save-btn:hover { background: #f0b930; }
+
+  /* STATS PAGE */
+  .stats-hdr { display: flex; align-items: flex-start; justify-content: space-between; margin-bottom: 18px; flex-wrap: wrap; gap: 10px; }
+  .stats-hdr h2 { font-size: 18px; font-weight: 600; }
+  .stats-hdr .sub { font-size: 12px; color: var(--text3); margin-top: 3px; }
+  .rfbtn {
+    font-size: 13px; padding: 7px 16px; border-radius: var(--radius);
+    border: 1px solid var(--border2); background: var(--bg2); color: var(--amber);
+    cursor: pointer; font-family: var(--font); font-weight: 500; white-space: nowrap;
+    transition: background .15s;
+  }
+  .rfbtn:hover { background: var(--amber-bg); }
+  .rfbtn:disabled { opacity: 0.4; pointer-events: none; }
+
+  .stat-tabs-wrap { overflow-x: auto; margin-bottom: 16px; }
+  .stat-tabs { display: flex; border-bottom: 1px solid var(--border); white-space: nowrap; }
+  .stb {
+    font-size: 12px; padding: 9px 14px; border: none; border-bottom: 2px solid transparent;
+    cursor: pointer; color: var(--text3); background: none; font-family: var(--font);
+    transition: color .15s; margin-bottom: -1px;
+  }
+  .stb:hover { color: var(--text2); }
+  .stb.on { color: var(--amber); border-bottom-color: var(--amber); font-weight: 500; }
+
+  .picks-chips { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 14px; min-height: 26px; }
+  .chip {
+    font-size: 11px; padding: 4px 10px; border-radius: 99px;
+    background: var(--amber-bg); color: var(--amber); font-weight: 500; border: 1px solid var(--amber-dim);
+  }
+  .chip.nr { background: var(--bg3); color: var(--text3); border-color: var(--border); font-weight: 400; }
+  .chip.done { background: var(--green-bg); color: var(--green); border-color: rgba(76,175,122,0.4); }
+
+  .lb-row-mine { background: rgba(232,169,40,0.04); }
+  .lb-row-mine:hover { background: rgba(232,169,40,0.08) !important; }
+  .dot { display: inline-block; width: 6px; height: 6px; border-radius: 50%; background: var(--amber); margin-right: 7px; vertical-align: middle; position: relative; top: -1px; }
+  .rank { font-size: 12px; color: var(--text3); width: 36px; font-family: var(--mono); }
+  .lb-val { font-family: var(--mono); font-weight: 600; color: var(--text); text-align: right; }
+  .ms-tag {
+    font-size: 10px; padding: 1px 6px; border-radius: 4px;
+    background: var(--red-bg); color: var(--red); margin-left: 6px; font-weight: 500;
+  }
+  .ms-tag.done { background: var(--green-bg); color: var(--green); }
+  .mkt-tag {
+    font-size: 10px; padding: 2px 6px; border-radius: 99px;
+    background: var(--blue-bg); color: var(--blue); margin-left: 5px; white-space: nowrap;
+  }
+  .sec-lbl {
+    font-size: 11px; font-weight: 600; color: var(--text3); letter-spacing: .08em;
+    text-transform: uppercase; margin: 20px 0 8px; padding-bottom: 6px;
+    border-bottom: 1px solid var(--border);
+  }
+  .sec-lbl:first-child { margin-top: 0; }
+  .state-msg { padding: 2.5rem; text-align: center; color: var(--text3); font-size: 13px; }
+  .err-msg { color: var(--red); font-size: 12px; margin-top: 4px; }
+
+  /* RESPONSIVE */
+  @media(max-width:640px){
+    .page { padding: 16px; }
+    .topnav { padding: 0 16px; }
+    .controls input { width: 140px; }
+    .col-book, .col-stake { display: none; }
+  }
+</style>
+</head>
+<body>
+
+<nav class="topnav">
+  <div class="logo">⚾ <span>MLB</span> Futures 2026</div>
+  <div class="nav-tabs">
+    <button class="nav-tab on" onclick="switchPage('futures',this)">Futures Tracker</button>
+    <button class="nav-tab" onclick="switchPage('stats',this)">Live Stats</button>
+  </div>
+</nav>
+
+<!-- ═══════════════════════════════════════════ FUTURES PAGE ═══ -->
+<div class="page on" id="page-futures">
+  <div class="metrics">
+    <div class="metric"><div class="metric-label">Total Staked</div><div class="metric-value" id="m-staked">—</div></div>
+    <div class="metric"><div class="metric-label">Max Payout</div><div class="metric-value" id="m-win">—</div></div>
+    <div class="metric"><div class="metric-label">Pending</div><div class="metric-value amber" id="m-pending">—</div></div>
+    <div class="metric"><div class="metric-label">Wins</div><div class="metric-value green" id="m-wins">—</div></div>
+    <div class="metric"><div class="metric-label">Losses</div><div class="metric-value red" id="m-losses">—</div></div>
+    <div class="metric"><div class="metric-label">Net P&amp;L</div><div class="metric-value" id="m-pnl">—</div></div>
+  </div>
+
+  <div class="controls">
+    <input type="text" id="search" placeholder="Search player, market…" oninput="renderFutures()">
+    <select id="flt-market" onchange="renderFutures()"><option value="">All markets</option></select>
+    <select id="flt-book" onchange="renderFutures()"><option value="">All books</option></select>
+    <select id="flt-status" onchange="renderFutures()">
+      <option value="">All statuses</option>
+      <option value="pending">Pending</option>
+      <option value="win">Win</option>
+      <option value="loss">Loss</option>
+    </select>
+    <button class="add-btn" onclick="openModal()">+ Add Bet</button>
+  </div>
+
+  <div class="tbl-wrap">
+    <table>
+      <thead>
+        <tr>
+          <th onclick="sortBy('market')">Market ↕</th>
+          <th onclick="sortBy('player')">Player / Selection ↕</th>
+          <th class="col-book" onclick="sortBy('book')">Book ↕</th>
+          <th onclick="sortBy('odds')">Odds ↕</th>
+          <th class="col-stake" onclick="sortBy('stake')">Stake ↕</th>
+          <th onclick="sortBy('toWin')">To Win ↕</th>
+          <th>Status</th>
+          <th></th>
+        </tr>
+      </thead>
+      <tbody id="ftable-body"></tbody>
+    </table>
+    <div id="no-results" class="no-results" style="display:none">No bets match your filters.</div>
+  </div>
+</div>
+
+<!-- ═══════════════════════════════════════════ STATS PAGE ═══ -->
+<div class="page" id="page-stats">
+  <div class="stats-hdr">
+    <div>
+      <h2>Live 2026 MLB Leaderboards</h2>
+      <div class="sub" id="upd-lbl">Press Refresh to load live stats.</div>
+    </div>
+    <button class="rfbtn" id="rfbtn" onclick="loadStats()">↻ Refresh</button>
+  </div>
+  <div class="stat-tabs-wrap"><div class="stat-tabs" id="stat-tabs"></div></div>
+  <div id="stat-content"></div>
+</div>
+
+<!-- MODAL -->
+<div class="modal-bg" id="modal-bg" onclick="closeBg(event)">
+  <div class="modal">
+    <h3>Add New Bet</h3>
+    <div class="form-grid">
+      <div class="form-group full"><label>Market</label><input type="text" id="f-market" placeholder="e.g. AL MVP"></div>
+      <div class="form-group full"><label>Player / Selection</label><input type="text" id="f-player" placeholder="e.g. Gunnar Henderson"></div>
+      <div class="form-group"><label>Odds (American)</label><input type="text" id="f-odds" placeholder="+1700"></div>
+      <div class="form-group"><label>Sportsbook</label><input type="text" id="f-book" placeholder="e.g. Caesars"></div>
+      <div class="form-group"><label>Stake ($)</label><input type="number" id="f-stake" placeholder="0.00" step="0.01"></div>
+      <div class="form-group"><label>To Win ($)</label><input type="number" id="f-towin" placeholder="0.00" step="0.01"></div>
+    </div>
+    <div class="modal-actions">
+      <button onclick="closeModal()">Cancel</button>
+      <button class="save-btn" onclick="saveBet()">Save Bet</button>
+    </div>
+  </div>
+</div>
+
+<script>
+// ──────────────────────────────────────────────────────────────
+//  FUTURES DATA
+// ──────────────────────────────────────────────────────────────
+const RAW_BETS = [
+  {market:"35+ HR",player:"Jac Caglianone",book:"Bet365",odds:"+2000",stake:37.50,toWin:750.00,status:"pending"},
+  {market:"35+ HR",player:"Roman Anthony",book:"Bet365",odds:"+1800",stake:50.00,toWin:900.00,status:"pending"},
+  {market:"AL Cy Young",player:"Cole Ragans",book:"Straightslate",odds:"+1200",stake:75.00,toWin:900.00,status:"pending"},
+  {market:"AL Cy Young",player:"Gavin Williams",book:"Caesars",odds:"+4000",stake:20.00,toWin:800.00,status:"pending"},
+  {market:"AL Cy Young",player:"Gavin Williams",book:"FanDuel",odds:"+4000",stake:5.00,toWin:200.00,status:"pending"},
+  {market:"AL Cy Young",player:"Logan Gilbert",book:"Straightslate",odds:"+2000",stake:50.00,toWin:1000.00,status:"pending"},
+  {market:"AL Manager of the Year",player:"Matt Quatraro",book:"Straightslate",odds:"+2200",stake:50.00,toWin:1100.00,status:"pending"},
+  {market:"AL MVP",player:"Gunnar Henderson",book:"Straightslate",odds:"+1700",stake:15.00,toWin:255.00,status:"pending"},
+  {market:"AL MVP",player:"Gunnar Henderson",book:"Caesars",odds:"+1800",stake:15.00,toWin:270.00,status:"pending"},
+  {market:"AL MVP",player:"Gunnar Henderson",book:"Hard Rock",odds:"+2250",stake:10.00,toWin:225.00,status:"pending"},
+  {market:"AL MVP",player:"Mike Trout",book:"Fanatics",odds:"+4500",stake:15.00,toWin:675.00,status:"pending"},
+  {market:"AL MVP",player:"Roman Anthony",book:"Bet365",odds:"+1800",stake:10.00,toWin:180.00,status:"pending"},
+  {market:"AL MVP",player:"Roman Anthony",book:"Caesars",odds:"+2000",stake:13.00,toWin:260.00,status:"pending"},
+  {market:"AL MVP",player:"Roman Anthony",book:"FanDuel",odds:"+2000",stake:20.00,toWin:400.00,status:"pending"},
+  {market:"AL MVP",player:"Tarik Skubal",book:"Bet365",odds:"+4500",stake:10.00,toWin:450.00,status:"pending"},
+  {market:"AL MVP",player:"Tarik Skubal",book:"Caesars",odds:"+5000",stake:5.00,toWin:250.00,status:"pending"},
+  {market:"AL MVP",player:"Tarik Skubal",book:"Hard Rock",odds:"+5000",stake:10.00,toWin:500.00,status:"pending"},
+  {market:"AL Rookie of the Year",player:"Kevin McGonigle",book:"Straightslate",odds:"+800",stake:100.00,toWin:800.00,status:"pending"},
+  {market:"AL Rookie of the Year",player:"Carter Jensen",book:"Caesars",odds:"+1600",stake:50.75,toWin:812.00,status:"pending"},
+  {market:"MLB Best Record",player:"Philadelphia Phillies",book:"Circa",odds:"+2800",stake:40.00,toWin:1120.00,status:"pending"},
+  {market:"MLB Doubles Leader",player:"Brent Rooker",book:"Bet365",odds:"+7000",stake:10.00,toWin:700.00,status:"pending"},
+  {market:"MLB Doubles Leader",player:"Bryan Reynolds",book:"Bet365",odds:"+8000",stake:10.00,toWin:800.00,status:"pending"},
+  {market:"MLB Doubles Leader",player:"James Wood",book:"Bet365",odds:"+7000",stake:10.00,toWin:700.00,status:"pending"},
+  {market:"MLB Doubles Leader",player:"Jung Hoo Lee",book:"Bet365",odds:"+2200",stake:35.00,toWin:770.00,status:"pending"},
+  {market:"MLB Doubles Leader",player:"Rafael Devers",book:"Bet365",odds:"+8000",stake:10.00,toWin:800.00,status:"pending"},
+  {market:"MLB Doubles Leader",player:"Roman Anthony",book:"Bet365",odds:"+3000",stake:25.00,toWin:750.00,status:"pending"},
+  {market:"MLB Hits Leader",player:"Brendan Donovan",book:"Bet365",odds:"+30000",stake:9.50,toWin:2850.00,status:"pending"},
+  {market:"MLB Hits Leader",player:"Jackson Chourio",book:"Bovada",odds:"+3000",stake:30.00,toWin:900.00,status:"pending"},
+  {market:"MLB Hits Leader",player:"Jacob Wilson",book:"Bovada",odds:"+1300",stake:55.00,toWin:715.00,status:"pending"},
+  {market:"MLB Hits Leader",player:"Jung Hoo Lee",book:"Bovada",odds:"+8000",stake:10.00,toWin:800.00,status:"pending"},
+  {market:"MLB Hits Leader",player:"Roman Anthony",book:"Bet365",odds:"+15000",stake:10.25,toWin:1537.50,status:"pending"},
+  {market:"MLB Hits Leader",player:"Ronald Acuna Jr.",book:"Bovada",odds:"+1500",stake:50.00,toWin:750.00,status:"pending"},
+  {market:"MLB Hits Leader",player:"Ronald Acuna Jr.",book:"Draftkings",odds:"+4500",stake:0.84,toWin:37.80,status:"pending"},
+  {market:"MLB Hits Leader",player:"Ronald Acuna Jr.",book:"Bet365",odds:"+3500",stake:20.00,toWin:700.00,status:"pending"},
+  {market:"MLB Hits Leader",player:"Wyatt Langford",book:"Bet365",odds:"+30000",stake:9.50,toWin:2850.00,status:"pending"},
+  {market:"MLB HR Leader",player:"Giancarlo Stanton",book:"Bet365",odds:"+20000",stake:10.00,toWin:2000.00,status:"pending"},
+  {market:"MLB HR Leader",player:"Jac Caglianone",book:"Bet365",odds:"+7500",stake:10.00,toWin:750.00,status:"pending"},
+  {market:"MLB HR Leader",player:"James Wood",book:"Bet365",odds:"+15000",stake:10.00,toWin:1500.00,status:"pending"},
+  {market:"MLB HR Leader",player:"Mike Trout",book:"Bet365",odds:"+12500",stake:10.00,toWin:1250.00,status:"pending"},
+  {market:"MLB HR Leader",player:"Roman Anthony",book:"Bet365",odds:"+20000",stake:10.00,toWin:2000.00,status:"pending"},
+  {market:"MLB HR Leader",player:"Royce Lewis",book:"Bet365",odds:"+30000",stake:10.00,toWin:3000.00,status:"pending"},
+  {market:"MLB K Leader",player:"Chase Burns",book:"Hard Rock",odds:"+2250",stake:5.00,toWin:112.50,status:"pending"},
+  {market:"MLB K Leader",player:"Chase Burns",book:"The Score",odds:"+2500",stake:25.00,toWin:625.00,status:"pending"},
+  {market:"MLB K Leader",player:"Chris Sale",book:"Bet365",odds:"+2800",stake:30.00,toWin:840.00,status:"pending"},
+  {market:"MLB K Leader",player:"Cole Ragans",book:"Hard Rock",odds:"+1750",stake:10.00,toWin:175.00,status:"pending"},
+  {market:"MLB K Leader",player:"Cole Ragans",book:"Fanatics",odds:"+1800",stake:9.50,toWin:171.00,status:"pending"},
+  {market:"MLB K Leader",player:"Cole Ragans",book:"The Score",odds:"+1800",stake:25.00,toWin:450.00,status:"pending"},
+  {market:"MLB K Leader",player:"Jacob Misiorowski",book:"Bet365",odds:"+6500",stake:20.00,toWin:1300.00,status:"pending"},
+  {market:"MLB K Leader",player:"Logan Gilbert",book:"Bet365",odds:"+4500",stake:20.00,toWin:900.00,status:"pending"},
+  {market:"MLB RBI Leader",player:"Giancarlo Stanton",book:"Bet365",odds:"+10000",stake:7.50,toWin:750.00,status:"pending"},
+  {market:"MLB RBI Leader",player:"Jac Caglianone",book:"Bet365",odds:"+15000",stake:10.00,toWin:1500.00,status:"pending"},
+  {market:"MLB RBI Leader",player:"Nick Kurtz",book:"Bet365",odds:"+5000",stake:40.00,toWin:2000.00,status:"pending"},
+  {market:"MLB RBI Leader",player:"Kyle Schwarber",book:"Hard Rock",odds:"+4000",stake:10.00,toWin:400.00,status:"pending"},
+  {market:"MLB RBI Leader",player:"Kyle Schwarber",book:"Draftkings",odds:"+3500",stake:1.09,toWin:38.15,status:"pending"},
+  {market:"MLB RBI Leader",player:"Kyle Schwarber",book:"Fanatics",odds:"+3000",stake:14.50,toWin:435.00,status:"pending"},
+  {market:"MLB RBI Leader",player:"Kyle Tucker",book:"Bet365",odds:"+3000",stake:25.00,toWin:750.00,status:"pending"},
+  {market:"MLB RBI Leader",player:"Vinnie Pasquantino",book:"Bet365",odds:"+3500",stake:25.00,toWin:875.00,status:"pending"},
+  {market:"MLB Runs Leader",player:"Nick Kurtz",book:"Bovada",odds:"+3200",stake:19.53,toWin:624.96,status:"pending"},
+  {market:"MLB Runs Leader",player:"Roman Anthony",book:"Bovada",odds:"+7500",stake:10.00,toWin:750.00,status:"pending"},
+  {market:"MLB Saves Leader",player:"Andres Munoz",book:"Bet365",odds:"+1400",stake:40.00,toWin:560.00,status:"pending"},
+  {market:"MLB Saves Leader",player:"Jhoan Duran",book:"Draftkings",odds:"+1700",stake:2.25,toWin:38.25,status:"pending"},
+  {market:"MLB Saves Leader",player:"Jhoan Duran",book:"Straightslate",odds:"+1600",stake:50.00,toWin:800.00,status:"pending"},
+  {market:"MLB SB Leader",player:"Jake Mangum",book:"Bet365",odds:"+2000",stake:30.00,toWin:600.00,status:"pending"},
+  {market:"MLB SB Leader",player:"Konnor Griffin",book:"Fanatics",odds:"+4000",stake:19.50,toWin:780.00,status:"pending"},
+  {market:"MLB SB Leader",player:"Ronald Acuna Jr.",book:"The Score",odds:"+2500",stake:25.00,toWin:625.00,status:"pending"},
+  {market:"MLB SB Leader",player:"Ronald Acuna Jr.",book:"Bet365",odds:"+2500",stake:10.00,toWin:250.00,status:"pending"},
+  {market:"MLB SB Leader",player:"Ronald Acuna Jr.",book:"Draftkings",odds:"+2500",stake:1.52,toWin:38.00,status:"pending"},
+  {market:"MLB SB Leader",player:"Xavier Edwards",book:"Caesars",odds:"+2500",stake:10.00,toWin:250.00,status:"pending"},
+  {market:"MLB SB Leader",player:"Xavier Edwards",book:"Hard Rock",odds:"+3000",stake:10.00,toWin:300.00,status:"pending"},
+  {market:"MLB Triples Leader",player:"Bobby Witt Jr.",book:"Bovada",odds:"+1800",stake:34.72,toWin:624.96,status:"pending"},
+  {market:"MLB Wins Leader",player:"Blake Snell",book:"Bet365",odds:"+3500",stake:10.00,toWin:350.00,status:"pending"},
+  {market:"MLB Wins Leader",player:"Brandon Woodruff",book:"Hard Rock",odds:"+10000",stake:10.00,toWin:1000.00,status:"pending"},
+  {market:"MLB Wins Leader",player:"Chris Sale",book:"Bet365",odds:"+2200",stake:15.99,toWin:351.78,status:"pending"},
+  {market:"MLB Wins Leader",player:"Christopher Sanchez",book:"Fanatics",odds:"+1300",stake:49.50,toWin:643.50,status:"pending"},
+  {market:"MLB Wins Leader",player:"Trevor Rogers",book:"Bet365",odds:"+6000",stake:15.00,toWin:900.00,status:"pending"},
+  {market:"MLB Wins Leader",player:"Yoshinobu Yamamoto",book:"Bet365",odds:"+2000",stake:18.00,toWin:360.00,status:"pending"},
+  {market:"MLB Wins Leader",player:"Zack Wheeler",book:"Hard Rock",odds:"+15000",stake:10.00,toWin:1500.00,status:"pending"},
+  {market:"MLB Worst Record",player:"Minnesota Twins",book:"Bovada",odds:"+3500",stake:25.00,toWin:875.00,status:"pending"},
+  {market:"Next Manager Fired",player:"Oliver Marmol",book:"Bovada",odds:"+800",stake:48.82,toWin:390.56,status:"pending"},
+  {market:"NL Cy Young",player:"Eury Perez",book:"Bet365",odds:"+4500",stake:20.00,toWin:900.00,status:"pending"},
+  {market:"NL Cy Young",player:"Jacob Misiorowski",book:"Bet365",odds:"+3000",stake:25.00,toWin:750.00,status:"pending"},
+  {market:"NL Cy Young",player:"Shohei Ohtani",book:"Fanatics",odds:"+3850",stake:25.00,toWin:962.50,status:"pending"},
+  {market:"NL Manager of the Year",player:"Terry Francona",book:"Straightslate",odds:"+1400",stake:40.00,toWin:560.00,status:"pending"},
+  {market:"NL Manager of the Year",player:"Terry Francona",book:"The Score",odds:"+2000",stake:10.00,toWin:200.00,status:"pending"},
+  {market:"NL MVP",player:"Paul Skenes",book:"The Score",odds:"+4000",stake:10.00,toWin:400.00,status:"pending"},
+  {market:"NL MVP",player:"Paul Skenes",book:"Hard Rock",odds:"+4000",stake:10.00,toWin:400.00,status:"pending"},
+  {market:"NL MVP",player:"Ronald Acuna Jr.",book:"Straightslate",odds:"+1200",stake:100.00,toWin:1200.00,status:"pending"},
+  {market:"NL Rookie of the Year",player:"Charlie Condon",book:"Bet365",odds:"+4000",stake:30.00,toWin:1200.00,status:"pending"},
+  {market:"NL Rookie of the Year",player:"Zac Veen",book:"Caesars",odds:"+3000",stake:14.75,toWin:442.50,status:"pending"},
+  {market:"World Baseball Classic MVP",player:"Bobby Witt Jr.",book:"Bovada",odds:"+2500",stake:40.00,toWin:1000.00,status:"loss"},
+  {market:"World Baseball Classic MVP",player:"Bryce Harper",book:"Straightslate",odds:"+1800",stake:50.00,toWin:900.00,status:"loss"},
+  {market:"World Series Winner",player:"Philadelphia Phillies",book:"Circa",odds:"+1600",stake:75.00,toWin:1200.00,status:"pending"},
+];
+
+// ── persistent state in localStorage ──
+const STORAGE_KEY = 'mlb2026_bets_v1';
+function loadBets() {
+  try { const s = localStorage.getItem(STORAGE_KEY); return s ? JSON.parse(s) : null; } catch(e){ return null; }
+}
+function saveBets() {
+  try { localStorage.setItem(STORAGE_KEY, JSON.stringify(bets)); } catch(e){}
+}
+
+let bets = loadBets() || RAW_BETS.map((b,i)=>({...b,id:i}));
+let nextId = bets.length ? Math.max(...bets.map(b=>b.id))+1 : 0;
+let sortCol = 'market', sortDir = 1;
+
+function fmt(n){ return '$'+n.toFixed(2).replace(/\B(?=(\d{3})+(?!\d))/g,','); }
+
+function getFiltered(){
+  const q = document.getElementById('search').value.toLowerCase();
+  const mkt = document.getElementById('flt-market').value;
+  const bk = document.getElementById('flt-book').value;
+  const st = document.getElementById('flt-status').value;
+  return bets.filter(b=>{
+    if(q && !b.player.toLowerCase().includes(q) && !b.market.toLowerCase().includes(q)) return false;
+    if(mkt && b.market !== mkt) return false;
+    if(bk && b.book !== bk) return false;
+    if(st && b.status !== st) return false;
+    return true;
+  });
+}
+
+function getSorted(arr){
+  return [...arr].sort((a,b)=>{
+    let av=a[sortCol], bv=b[sortCol];
+    if(typeof av==='string') return av.localeCompare(bv)*sortDir;
+    return (av-bv)*sortDir;
+  });
+}
+
+function sortBy(col){
+  if(sortCol===col) sortDir*=-1; else {sortCol=col;sortDir=1;}
+  renderFutures();
+}
+
+function cycleStatus(id){
+  const b=bets.find(x=>x.id===id); if(!b) return;
+  b.status = b.status==='pending'?'win':b.status==='win'?'loss':'pending';
+  saveBets(); renderFutures();
+}
+function deleteBet(id){
+  bets=bets.filter(b=>b.id!==id); saveBets(); renderFutures();
+}
+
+function populateFilters(){
+  const markets=[...new Set(bets.map(b=>b.market))].sort();
+  const books=[...new Set(bets.map(b=>b.book))].sort();
+  const ms=document.getElementById('flt-market'), mVal=ms.value;
+  const bs=document.getElementById('flt-book'), bVal=bs.value;
+  ms.innerHTML='<option value="">All markets</option>'+markets.map(m=>`<option${m===mVal?' selected':''}>${m}</option>`).join('');
+  bs.innerHTML='<option value="">All books</option>'+books.map(b=>`<option${b===bVal?' selected':''}>${b}</option>`).join('');
+}
+
+function updateMetrics(vis){
+  const staked=vis.reduce((a,b)=>a+b.stake,0);
+  const maxWin=vis.reduce((a,b)=>a+b.toWin,0);
+  const wins=vis.filter(b=>b.status==='win').length;
+  const losses=vis.filter(b=>b.status==='loss').length;
+  const pending=vis.filter(b=>b.status==='pending').length;
+  const wonAmt=vis.filter(b=>b.status==='win').reduce((a,b)=>a+b.toWin,0);
+  const lostAmt=vis.filter(b=>b.status==='loss').reduce((a,b)=>a+b.stake,0);
+  const pnl=wonAmt-lostAmt;
+  document.getElementById('m-staked').textContent=fmt(staked);
+  document.getElementById('m-win').textContent=fmt(maxWin);
+  document.getElementById('m-pending').textContent=pending;
+  document.getElementById('m-wins').textContent=wins;
+  document.getElementById('m-losses').textContent=losses;
+  const el=document.getElementById('m-pnl');
+  el.textContent=(pnl>=0?'+':'')+fmt(pnl);
+  el.className='metric-value '+(pnl>0?'green':pnl<0?'red':'');
+}
+
+function renderFutures(){
+  populateFilters();
+  const data=getSorted(getFiltered());
+  const tbody=document.getElementById('ftable-body');
+  const nr=document.getElementById('no-results');
+  updateMetrics(data);
+  if(!data.length){ tbody.innerHTML=''; nr.style.display='block'; return; }
+  nr.style.display='none';
+  tbody.innerHTML=data.map(b=>`
+    <tr>
+      <td><span class="market-tag">${b.market}</span></td>
+      <td style="color:var(--text)">${b.player}</td>
+      <td class="col-book mono">${b.book}</td>
+      <td class="odds">${b.odds}</td>
+      <td class="col-stake mono">${fmt(b.stake)}</td>
+      <td class="win-amt">${fmt(b.toWin)}</td>
+      <td><button class="status-btn status-${b.status}" onclick="cycleStatus(${b.id})">${b.status}</button></td>
+      <td><button class="del-btn" onclick="deleteBet(${b.id})" title="Remove">✕</button></td>
+    </tr>`).join('');
+}
+
+function openModal(){ document.getElementById('modal-bg').classList.add('open'); }
+function closeModal(){ document.getElementById('modal-bg').classList.remove('open'); ['f-market','f-player','f-odds','f-book','f-stake','f-towin'].forEach(id=>document.getElementById(id).value=''); }
+function closeBg(e){ if(e.target===document.getElementById('modal-bg')) closeModal(); }
+function saveBet(){
+  const market=document.getElementById('f-market').value.trim();
+  const player=document.getElementById('f-player').value.trim();
+  if(!market||!player) return;
+  bets.push({
+    id:nextId++, market, player,
+    odds:document.getElementById('f-odds').value.trim()||'—',
+    book:document.getElementById('f-book').value.trim()||'—',
+    stake:parseFloat(document.getElementById('f-stake').value)||0,
+    toWin:parseFloat(document.getElementById('f-towin').value)||0,
+    status:'pending'
+  });
+  saveBets(); closeModal(); renderFutures();
+}
+
+// ──────────────────────────────────────────────────────────────
+//  STATS DATA
+// ──────────────────────────────────────────────────────────────
+const MY_PICKS = [
+  {cat:'homeRuns',player:'Jac Caglianone',milestone:35},
+  {cat:'homeRuns',player:'Roman Anthony',milestone:35},
+  {cat:'homeRuns',player:'Giancarlo Stanton'},
+  {cat:'homeRuns',player:'James Wood'},
+  {cat:'homeRuns',player:'Mike Trout'},
+  {cat:'homeRuns',player:'Royce Lewis'},
+  {cat:'hits',player:'Brendan Donovan'},
+  {cat:'hits',player:'Jackson Chourio'},
+  {cat:'hits',player:'Jacob Wilson'},
+  {cat:'hits',player:'Jung Hoo Lee'},
+  {cat:'hits',player:'Roman Anthony'},
+  {cat:'hits',player:'Ronald Acuna Jr.'},
+  {cat:'hits',player:'Wyatt Langford'},
+  {cat:'rbi',player:'Giancarlo Stanton'},
+  {cat:'rbi',player:'Jac Caglianone'},
+  {cat:'rbi',player:'Nick Kurtz'},
+  {cat:'rbi',player:'Kyle Schwarber'},
+  {cat:'rbi',player:'Kyle Tucker'},
+  {cat:'rbi',player:'Vinnie Pasquantino'},
+  {cat:'doubles',player:'Brent Rooker'},
+  {cat:'doubles',player:'Bryan Reynolds'},
+  {cat:'doubles',player:'James Wood'},
+  {cat:'doubles',player:'Jung Hoo Lee'},
+  {cat:'doubles',player:'Rafael Devers'},
+  {cat:'doubles',player:'Roman Anthony'},
+  {cat:'triples',player:'Bobby Witt Jr.'},
+  {cat:'stolenBases',player:'Jake Mangum'},
+  {cat:'stolenBases',player:'Konnor Griffin'},
+  {cat:'stolenBases',player:'Ronald Acuna Jr.'},
+  {cat:'stolenBases',player:'Xavier Edwards'},
+  {cat:'wins',player:'Blake Snell'},
+  {cat:'wins',player:'Brandon Woodruff'},
+  {cat:'wins',player:'Chris Sale'},
+  {cat:'wins',player:'Christopher Sanchez'},
+  {cat:'wins',player:'Trevor Rogers'},
+  {cat:'wins',player:'Yoshinobu Yamamoto'},
+  {cat:'wins',player:'Zack Wheeler'},
+  {cat:'strikeouts',player:'Chase Burns'},
+  {cat:'strikeouts',player:'Chris Sale'},
+  {cat:'strikeouts',player:'Cole Ragans'},
+  {cat:'strikeouts',player:'Jacob Misiorowski'},
+  {cat:'strikeouts',player:'Logan Gilbert'},
+  {cat:'saves',player:'Andres Munoz'},
+  {cat:'saves',player:'Jhoan Duran'},
+  {cat:'runs',player:'Nick Kurtz'},
+  {cat:'runs',player:'Roman Anthony'},
+];
+
+const STAT_CATS = [
+  {id:'summary',label:'My Picks'},
+  {id:'homeRuns',label:'Home Runs',sl:'HR'},
+  {id:'hits',label:'Hits',sl:'H'},
+  {id:'rbi',label:'RBI',sl:'RBI'},
+  {id:'doubles',label:'Doubles',sl:'2B'},
+  {id:'triples',label:'Triples',sl:'3B'},
+  {id:'stolenBases',label:'SB',sl:'SB'},
+  {id:'wins',label:'Wins',sl:'W'},
+  {id:'strikeouts',label:'Strikeouts',sl:'K'},
+  {id:'saves',label:'Saves',sl:'SV'},
+  {id:'runs',label:'Runs',sl:'R'},
+];
+
+const ALIASES = {'kick kurtz':'nick kurtz'};
+function normName(s){
+  let n=(s||'').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g,'').replace(/[.']/g,'').replace(/\b(jr|sr|ii|iii)\b/g,'').replace(/\s+/g,' ').trim();
+  return ALIASES[n]||n;
+}
+function nameMatch(a,b){return normName(a)===normName(b);}
+
+let apiData={};
+let activeStatTab='summary';
+
+async function loadStats(){
+  const btn=document.getElementById('rfbtn');
+  const lbl=document.getElementById('upd-lbl');
+  btn.disabled=true; btn.textContent='↻ Loading…';
+  lbl.textContent='Fetching from MLB Stats API…';
+  try{
+    const cats=STAT_CATS.filter(c=>c.sl).map(c=>c.id).join(',');
+    const res=await fetch(`https://statsapi.mlb.com/api/v1/stats/leaders?leaderCategories=${cats}&season=2026&limit=35&sportId=1`);
+    if(!res.ok) throw new Error(`HTTP ${res.status}`);
+    const j=await res.json();
+    apiData={};
+    for(const g of (j.leagueLeaders||[])){
+      apiData[g.leaderCategory]=(g.leaders||[]).map(l=>({
+        rank:+l.rank,
+        name:l.person?.fullName||'?',
+        team:l.team?.abbreviation||'—',
+        value:+l.value
+      }));
+    }
+    const t=new Date().toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'});
+    lbl.textContent=`Live · Updated ${t}`;
+  }catch(e){
+    lbl.innerHTML=`<span class="err-msg">Could not reach MLB API — ${e.message}. Try again shortly.</span>`;
+  }
+  btn.disabled=false; btn.textContent='↻ Refresh';
+  renderStats();
+}
+
+function picksFor(cat){return MY_PICKS.filter(p=>p.cat===cat);}
+function uniqPicks(arr){const s=new Set(),r=[];for(const p of arr){if(!s.has(p.player)){s.add(p.player);r.push(p);}}return r;}
+function getRanking(cat,name){return (apiData[cat]||[]).find(l=>nameMatch(l.name,name))||null;}
+
+function renderStatTabs(){
+  document.getElementById('stat-tabs').innerHTML=STAT_CATS.map(c=>
+    `<button class="stb${c.id===activeStatTab?' on':''}" onclick="setStatTab('${c.id}')">${c.label}</button>`
+  ).join('');
+}
+function setStatTab(id){activeStatTab=id;renderStatTabs();renderStatContent();}
+
+function renderStatContent(){
+  const el=document.getElementById('stat-content');
+  if(activeStatTab==='summary'){renderStatSummary(el);return;}
+  const cat=STAT_CATS.find(c=>c.id===activeStatTab);
+  const list=apiData[cat.id];
+  const picks=uniqPicks(picksFor(cat.id));
+  const loaded=!!list;
+
+  const chips=picks.map(p=>{
+    const r=getRanking(cat.id,p.player);
+    if(!loaded) return `<span class="chip nr">${p.player} — loading</span>`;
+    if(!r) return `<span class="chip nr">${p.player} — not in top 35</span>`;
+    const need=p.milestone?p.milestone-r.value:null;
+    const done=need!==null&&need<=0;
+    let extra=need!==null?(done?` · ${p.milestone} ✓`:` · needs ${need} more`):'' ;
+    return `<span class="chip${done?' done':''}">#${r.rank} ${p.player} — ${r.value} ${cat.sl}${extra}</span>`;
+  }).join('');
+
+  if(!loaded){
+    el.innerHTML=`<div class="picks-chips">${chips}</div><div class="state-msg">Press Refresh to load live data.</div>`;return;
+  }
+  if(!list||!list.length){
+    el.innerHTML=`<div class="picks-chips">${chips}</div><div class="state-msg">No stats available yet — check back once games begin.</div>`;return;
+  }
+
+  const rows=list.map(l=>{
+    const isMine=picks.some(p=>nameMatch(l.name,p.player));
+    const ms=picks.find(p=>nameMatch(l.name,p.player)&&p.milestone);
+    let msTag='';
+    if(ms){const need=ms.milestone-l.value;msTag=`<span class="ms-tag${need<=0?' done':''}">${need>0?need+' to '+ms.milestone:ms.milestone+' ✓'}</span>`;}
+    return `<tr class="${isMine?'lb-row-mine':''}">
+      <td class="rank">${l.rank}</td>
+      <td>${isMine?'<span class="dot"></span>':''}${l.name}${msTag}</td>
+      <td style="color:var(--text2);font-size:12px;width:46px">${l.team}</td>
+      <td class="lb-val" style="width:60px">${l.value}</td>
+    </tr>`;
+  }).join('');
+
+  el.innerHTML=`<div class="picks-chips">${chips||'<span style="font-size:12px;color:var(--text3)">No picks in this category</span>'}</div>
+  <div class="tbl-wrap"><table>
+    <thead><tr><th style="width:36px">#</th><th>Player</th><th style="width:46px">Team</th><th style="width:60px;text-align:right">${cat.sl}</th></tr></thead>
+    <tbody>${rows}</tbody>
+  </table></div>`;
+}
+
+function renderStatSummary(el){
+  let html='';
+  const loaded=Object.keys(apiData).length>0;
+  for(const cat of STAT_CATS.filter(c=>c.sl)){
+    const picks=uniqPicks(picksFor(cat.id));
+    if(!picks.length) continue;
+    const rows=picks.map(p=>{
+      const r=getRanking(cat.id,p.player);
+      const rankTxt=loaded?(r?`#${r.rank}`:'NR'):'—';
+      let statTxt=loaded?(r?`${r.value} ${cat.sl}`:'—'):'—';
+      if(p.milestone&&r){const need=p.milestone-r.value;statTxt+=`<span class="ms-tag${need<=0?' done':''}" style="margin-left:6px">${need>0?need+' left':cat.sl+' ✓'}</span>`;}
+      return `<tr class="lb-row-mine">
+        <td>${p.player}</td>
+        <td style="text-align:right;color:var(--text2);font-family:var(--mono);font-size:12px;width:60px">${rankTxt}</td>
+        <td style="text-align:right;font-family:var(--mono);font-size:12px;font-weight:600;width:90px">${statTxt}</td>
+      </tr>`;
+    }).join('');
+    html+=`<div class="sec-lbl">${cat.label}</div>
+    <div class="tbl-wrap" style="margin-bottom:14px"><table>
+      <thead><tr><th>Player</th><th style="text-align:right;width:60px">Rank</th><th style="text-align:right;width:90px">Stat</th></tr></thead>
+      <tbody>${rows}</tbody>
+    </table></div>`;
+  }
+  el.innerHTML=html||'<div class="state-msg">No quantifiable picks found.</div>';
+}
+
+function renderStats(){ renderStatTabs(); renderStatContent(); }
+
+// ──────────────────────────────────────────────────────────────
+//  NAV
+// ──────────────────────────────────────────────────────────────
+function switchPage(id, btn){
+  document.querySelectorAll('.page').forEach(p=>p.classList.remove('on'));
+  document.querySelectorAll('.nav-tab').forEach(t=>t.classList.remove('on'));
+  document.getElementById('page-'+id).classList.add('on');
+  btn.classList.add('on');
+}
+
+// ── INIT ──
+renderFutures();
+renderStats();
+</script>
+</body>
+</html>
