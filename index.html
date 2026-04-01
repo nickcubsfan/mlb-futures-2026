@@ -559,15 +559,15 @@ const MY_PICKS = [
 const STAT_CATS = [
   {id:'summary',label:'My Picks'},
   {id:'homeRuns',   apiId:'homeRuns',       label:'Home Runs',  sl:'HR'},
-  {id:'hits',       apiId:'hits',           label:'Hits',       sl:'H'},
-  {id:'rbi',        apiId:'runsBattedIn',   label:'RBI',        sl:'RBI'},
-  {id:'doubles',    apiId:'doubles',        label:'Doubles',    sl:'2B'},
-  {id:'triples',    apiId:'triples',        label:'Triples',    sl:'3B'},
-  {id:'stolenBases',apiId:'stolenBases',    label:'SB',         sl:'SB'},
-  {id:'wins',       apiId:'wins',           label:'Wins',       sl:'W'},
-  {id:'strikeouts', apiId:'strikeOuts',     label:'Strikeouts', sl:'K'},
-  {id:'saves',      apiId:'saves',          label:'Saves',      sl:'SV'},
-  {id:'runs',       apiId:'runs',           label:'Runs',       sl:'R'},
+  {id:'hits',       apiId:'hits',                label:'Hits',       sl:'H'},
+  {id:'rbi',        apiId:'runsBattedIn',        label:'RBI',        sl:'RBI'},
+  {id:'doubles',    apiId:'doubles',             label:'Doubles',    sl:'2B'},
+  {id:'triples',    apiId:'triples',             label:'Triples',    sl:'3B'},
+  {id:'stolenBases',apiId:'stolenBases',         label:'SB',         sl:'SB'},
+  {id:'wins',       apiId:'wins',                label:'Wins',       sl:'W'},
+  {id:'strikeouts', apiId:'pitcherStrikeouts',   label:'Strikeouts', sl:'K'},
+  {id:'saves',      apiId:'saves',               label:'Saves',      sl:'SV'},
+  {id:'runs',       apiId:'runsScored',          label:'Runs',       sl:'R'},
 ];
 
 const ALIASES = {'kick kurtz':'nick kurtz'};
@@ -594,7 +594,7 @@ async function loadStats(){
       const res=await fetch(url);
       if(!res.ok) throw new Error(`HTTP ${res.status}`);
       const j=await res.json();
-      const grp=(j.leagueLeaders||[]).find(g=>g.leaderCategory===cat.apiId);
+      const grp=(j.leagueLeaders||[])[0];
       apiData[cat.id]=(grp?.leaders||[]).map(l=>({
         rank:+l.rank,
         name:l.person?.fullName||'?',
