@@ -558,16 +558,16 @@ const MY_PICKS = [
 
 const STAT_CATS = [
   {id:'summary',label:'My Picks'},
-  {id:'homeRuns',label:'Home Runs',sl:'HR'},
-  {id:'hits',label:'Hits',sl:'H'},
-  {id:'rbi',label:'RBI',sl:'RBI'},
-  {id:'doubles',label:'Doubles',sl:'2B'},
-  {id:'triples',label:'Triples',sl:'3B'},
-  {id:'stolenBases',label:'SB',sl:'SB'},
-  {id:'wins',label:'Wins',sl:'W'},
-  {id:'strikeouts',label:'Strikeouts',sl:'K'},
-  {id:'saves',label:'Saves',sl:'SV'},
-  {id:'runs',label:'Runs',sl:'R'},
+  {id:'homeRuns',   apiId:'homeRuns',       label:'Home Runs',  sl:'HR'},
+  {id:'hits',       apiId:'hits',           label:'Hits',       sl:'H'},
+  {id:'rbi',        apiId:'runsBattedIn',   label:'RBI',        sl:'RBI'},
+  {id:'doubles',    apiId:'doubles',        label:'Doubles',    sl:'2B'},
+  {id:'triples',    apiId:'triples',        label:'Triples',    sl:'3B'},
+  {id:'stolenBases',apiId:'stolenBases',    label:'SB',         sl:'SB'},
+  {id:'wins',       apiId:'wins',           label:'Wins',       sl:'W'},
+  {id:'strikeouts', apiId:'strikeOuts',     label:'Strikeouts', sl:'K'},
+  {id:'saves',      apiId:'saves',          label:'Saves',      sl:'SV'},
+  {id:'runs',       apiId:'runs',           label:'Runs',       sl:'R'},
 ];
 
 const ALIASES = {'kick kurtz':'nick kurtz'};
@@ -585,24 +585,34 @@ async function loadStats(){
   const lbl=document.getElementById('upd-lbl');
   btn.disabled=true; btn.textContent='↻ Loading…';
   lbl.textContent='Fetching from MLB Stats API…';
-  try{
-    const cats=STAT_CATS.filter(c=>c.sl).map(c=>c.id).join(',');
-    const res=await fetch(`https://statsapi.mlb.com/api/v1/stats/leaders?leaderCategories=${cats}&season=2026&limit=35&sportId=1`);
-    if(!res.ok) throw new Error(`HTTP ${res.status}`);
-    const j=await res.json();
-    apiData={};
-    for(const g of (j.leagueLeaders||[])){
-      apiData[g.leaderCategory]=(g.leaders||[]).map(l=>({
+  const statCats=STAT_CATS.filter(c=>c.sl);
+  let failed=0;
+  apiData={};
+  await Promise.all(statCats.map(async cat=>{
+    try{
+      const url=`https://statsapi.mlb.com/api/v1/stats/leaders?leaderCategories=${cat.apiId}&season=2026&limit=35&sportId=1`;
+      const res=await fetch(url);
+      if(!res.ok) throw new Error(`HTTP ${res.status}`);
+      const j=await res.json();
+      const grp=(j.leagueLeaders||[]).find(g=>g.leaderCategory===cat.apiId);
+      apiData[cat.id]=(grp?.leaders||[]).map(l=>({
         rank:+l.rank,
         name:l.person?.fullName||'?',
         team:l.team?.abbreviation||'—',
         value:+l.value
       }));
+    }catch(e){
+      failed++;
+      apiData[cat.id]=[];
     }
-    const t=new Date().toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'});
+  }));
+  const t=new Date().toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'});
+  if(failed===statCats.length){
+    lbl.innerHTML=`<span class="err-msg">Could not reach MLB API. Check your connection and try again.</span>`;
+  } else if(failed>0){
+    lbl.textContent=`Partial data · Updated ${t} (${failed} categories unavailable)`;
+  } else {
     lbl.textContent=`Live · Updated ${t}`;
-  }catch(e){
-    lbl.innerHTML=`<span class="err-msg">Could not reach MLB API — ${e.message}. Try again shortly.</span>`;
   }
   btn.disabled=false; btn.textContent='↻ Refresh';
   renderStats();
