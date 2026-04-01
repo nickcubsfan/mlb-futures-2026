@@ -557,17 +557,17 @@ const MY_PICKS = [
 ];
 
 const STAT_CATS = [
-  {id:'summary',label:'My Picks'},
-  {id:'homeRuns',   apiId:'homeRuns',       label:'Home Runs',  sl:'HR'},
-  {id:'hits',       apiId:'hits',                label:'Hits',       sl:'H'},
-  {id:'rbi',        apiId:'runsBattedIn',        label:'RBI',        sl:'RBI'},
-  {id:'doubles',    apiId:'doubles',             label:'Doubles',    sl:'2B'},
-  {id:'triples',    apiId:'triples',             label:'Triples',    sl:'3B'},
-  {id:'stolenBases',apiId:'stolenBases',         label:'SB',         sl:'SB'},
-  {id:'wins',       apiId:'wins',                label:'Wins',       sl:'W'},
-  {id:'strikeouts', apiId:'pitcherStrikeouts',   label:'Strikeouts', sl:'K'},
-  {id:'saves',      apiId:'saves',               label:'Saves',      sl:'SV'},
-  {id:'runs',       apiId:'runsScored',          label:'Runs',       sl:'R'},
+  {id:'summary',                                                          label:'My Picks'},
+  {id:'homeRuns',   group:'hitting',  sortStat:'homeRuns',               label:'Home Runs',  sl:'HR'},
+  {id:'hits',       group:'hitting',  sortStat:'hits',                   label:'Hits',       sl:'H'},
+  {id:'rbi',        group:'hitting',  sortStat:'rbi',                    label:'RBI',        sl:'RBI'},
+  {id:'doubles',    group:'hitting',  sortStat:'doubles',                label:'Doubles',    sl:'2B'},
+  {id:'triples',    group:'hitting',  sortStat:'triples',                label:'Triples',    sl:'3B'},
+  {id:'stolenBases',group:'hitting',  sortStat:'stolenBases',            label:'SB',         sl:'SB'},
+  {id:'runs',       group:'hitting',  sortStat:'runs',                   label:'Runs',       sl:'R'},
+  {id:'wins',       group:'pitching', sortStat:'wins',                   label:'Wins',       sl:'W'},
+  {id:'strikeouts', group:'pitching', sortStat:'strikeOuts',             label:'Strikeouts', sl:'K'},
+  {id:'saves',      group:'pitching', sortStat:'saves',                  label:'Saves',      sl:'SV'},
 ];
 
 const ALIASES = {'kick kurtz':'nick kurtz'};
@@ -584,22 +584,23 @@ async function loadStats(){
   const btn=document.getElementById('rfbtn');
   const lbl=document.getElementById('upd-lbl');
   btn.disabled=true; btn.textContent='↻ Loading…';
-  lbl.textContent='Fetching from MLB Stats API…';
+  lbl.textContent='Fetching live MLB stats…';
   const statCats=STAT_CATS.filter(c=>c.sl);
   let failed=0;
   apiData={};
   await Promise.all(statCats.map(async cat=>{
     try{
-      const url=`https://statsapi.mlb.com/api/v1/stats/leaders?leaderCategories=${cat.apiId}&season=2026&limit=35&sportId=1`;
-      const res=await fetch(url);
+      const base='https://bdfed.stitch.mlbinfra.com/bdfed/stats/player';
+      const params=`?env=prod&season=2026&sportId=1&stats=season&group=${cat.group}&gameType=R&limit=40&offset=0&sortStat=${cat.sortStat}&order=desc`;
+      const res=await fetch(base+params);
       if(!res.ok) throw new Error(`HTTP ${res.status}`);
       const j=await res.json();
-      const grp=(j.leagueLeaders||[])[0];
-      apiData[cat.id]=(grp?.leaders||[]).map(l=>({
-        rank:+l.rank,
-        name:l.person?.fullName||'?',
-        team:l.team?.abbreviation||'—',
-        value:+l.value
+      const rows=(j.stats||[]);
+      apiData[cat.id]=rows.map((l,i)=>({
+        rank:i+1,
+        name:l.playerFullName||l.playerFirstName+' '+l.playerLastName||'?',
+        team:l.teamAbbrev||l.teamName||'—',
+        value:+(l[cat.sortStat]||0)
       }));
     }catch(e){
       failed++;
@@ -608,7 +609,7 @@ async function loadStats(){
   }));
   const t=new Date().toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'});
   if(failed===statCats.length){
-    lbl.innerHTML=`<span class="err-msg">Could not reach MLB API. Check your connection and try again.</span>`;
+    lbl.innerHTML='<span class="err-msg">Could not reach MLB API. Check your connection and try again.</span>';
   } else if(failed>0){
     lbl.textContent=`Partial data · Updated ${t} (${failed} categories unavailable)`;
   } else {
