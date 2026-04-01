@@ -199,20 +199,89 @@
     .controls input { width: 140px; }
     .col-book, .col-stake { display: none; }
   }
+
+  /* ── DASHBOARD ── */
+  .db-grid { display: grid; grid-template-columns: repeat(12, 1fr); gap: 14px; }
+  .db-card { background: var(--bg2); border: 1px solid var(--border); border-radius: var(--radius-lg); padding: 20px 22px; }
+  .db-card.span2  { grid-column: span 2; }
+  .db-card.span3  { grid-column: span 3; }
+  .db-card.span4  { grid-column: span 4; }
+  .db-card.span6  { grid-column: span 6; }
+  .db-card.span8  { grid-column: span 8; }
+  .db-card.span12 { grid-column: span 12; }
+  .db-card-label { font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: .07em; color: var(--text3); margin-bottom: 10px; }
+  .db-big { font-size: 36px; font-weight: 700; line-height: 1; letter-spacing: -.02em; }
+  .db-big.amber { color: var(--amber); }
+  .db-big.green { color: var(--green); }
+  .db-big.red   { color: var(--red); }
+  .db-sub { font-size: 12px; color: var(--text3); margin-top: 6px; }
+  .db-hero { display: grid; grid-template-columns: repeat(auto-fit, minmax(160px,1fr)); gap: 14px; margin-bottom: 14px; }
+  .db-hero-card { background: var(--bg2); border: 1px solid var(--border); border-radius: var(--radius-lg); padding: 20px 22px; }
+  .db-hero-card.accent { border-color: var(--amber); background: linear-gradient(135deg, rgba(232,169,40,0.07) 0%, var(--bg2) 60%); }
+  .chart-wrap { position: relative; width: 100%; }
+  .db-list { list-style: none; display: flex; flex-direction: column; gap: 8px; }
+  .db-list li { display: flex; align-items: center; justify-content: space-between; font-size: 13px; gap: 8px; }
+  .db-list li .name { color: var(--text); flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .db-list li .val  { font-family: var(--mono); font-size: 12px; color: var(--amber); font-weight: 600; flex-shrink: 0; }
+  .db-list li .sub2 { font-size: 11px; color: var(--text3); flex-shrink: 0; }
+  .db-bar-row { display: flex; flex-direction: column; gap: 9px; }
+  .db-bar-item { display: flex; flex-direction: column; gap: 4px; }
+  .db-bar-meta { display: flex; justify-content: space-between; font-size: 12px; }
+  .db-bar-meta .lbl { color: var(--text2); }
+  .db-bar-meta .amt { color: var(--amber); font-family: var(--mono); font-weight: 600; }
+  .db-bar-track { height: 5px; background: var(--bg3); border-radius: 99px; overflow: hidden; }
+  .db-bar-fill  { height: 100%; border-radius: 99px; background: var(--amber); transition: width .6s ease; }
+  .db-bar-fill.green { background: var(--green); }
+  .db-bar-fill.blue  { background: var(--blue); }
+  .status-row { display: flex; gap: 18px; margin-top: 14px; }
+  .status-pill { display: flex; flex-direction: column; align-items: center; gap: 4px; }
+  .status-pill .pill-num { font-size: 28px; font-weight: 700; line-height: 1; }
+  .status-pill .pill-lbl { font-size: 11px; text-transform: uppercase; letter-spacing: .06em; color: var(--text3); }
+  .pill-num.amber { color: var(--amber); }
+  .pill-num.green { color: var(--green); }
+  .pill-num.red   { color: var(--red); }
+  .db-divider { width: 1px; background: var(--border); align-self: stretch; }
+  .odds-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+  .odds-item { background: var(--bg3); border-radius: var(--radius); padding: 10px 12px; }
+  .odds-item .o-player { font-size: 12px; color: var(--text); font-weight: 500; margin-bottom: 2px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .odds-item .o-market { font-size: 10px; color: var(--text3); margin-bottom: 6px; }
+  .odds-item .o-win { font-size: 15px; font-family: var(--mono); font-weight: 700; color: var(--green); }
+  .odds-item .o-odds { font-size: 11px; color: var(--amber); margin-left: 6px; }
+  .db-section-title { font-size: 13px; font-weight: 600; color: var(--text); margin-bottom: 14px; padding-bottom: 10px; border-bottom: 1px solid var(--border); display: flex; align-items: center; justify-content: space-between; }
+  .db-badge { font-size: 10px; padding: 2px 8px; border-radius: 99px; background: var(--amber-bg); color: var(--amber); font-weight: 600; }
+  .book-dot { width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; }
+  @media(max-width:900px){
+    .db-card.span8 { grid-column: span 12; }
+    .db-card.span4 { grid-column: span 12; }
+    .db-card.span6 { grid-column: span 12; }
+    .db-card.span3 { grid-column: span 6; }
+  }
+  @media(max-width:540px){
+    .db-card.span3 { grid-column: span 12; }
+    .odds-grid { grid-template-columns: 1fr; }
+  }
+
 </style>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.js"></script>
 </head>
 <body>
 
 <nav class="topnav">
   <div class="logo">⚾ <span>MLB</span> Futures 2026</div>
   <div class="nav-tabs">
-    <button class="nav-tab on" onclick="switchPage('futures',this)">Futures Tracker</button>
+    <button class="nav-tab on" onclick="switchPage('dashboard',this)">Dashboard</button>
+    <button class="nav-tab" onclick="switchPage('futures',this)">Futures Tracker</button>
     <button class="nav-tab" onclick="switchPage('stats',this)">Live Stats</button>
   </div>
 </nav>
 
+<!-- ═══════════════════════════════════════════ DASHBOARD PAGE ═══ -->
+<div class="page on" id="page-dashboard">
+  <div id="db-content"></div>
+</div>
+
 <!-- ═══════════════════════════════════════════ FUTURES PAGE ═══ -->
-<div class="page on" id="page-futures">
+<div class="page" id="page-futures">
   <div class="metrics">
     <div class="metric"><div class="metric-label">Total Staked</div><div class="metric-value" id="m-staked">—</div></div>
     <div class="metric"><div class="metric-label">Max Payout</div><div class="metric-value" id="m-win">—</div></div>
@@ -402,10 +471,11 @@ let sortCol = 'market', sortDir = 1;
 function fmt(n){ return '$'+n.toFixed(2).replace(/\B(?=(\d{3})+(?!\d))/g,','); }
 
 function getFiltered(){
-  const q = document.getElementById('search').value.toLowerCase();
-  const mkt = document.getElementById('flt-market').value;
-  const bk = document.getElementById('flt-book').value;
-  const st = document.getElementById('flt-status').value;
+  const mob = window.innerWidth <= 640;
+  const q = (mob ? document.getElementById('mob-search') : document.getElementById('search'))?.value?.toLowerCase() || document.getElementById('search')?.value?.toLowerCase() || '';
+  const mkt = (mob ? document.getElementById('mob-flt-market') : document.getElementById('flt-market'))?.value || document.getElementById('flt-market')?.value || '';
+  const bk = (mob ? document.getElementById('mob-flt-book') : document.getElementById('flt-book'))?.value || document.getElementById('flt-book')?.value || '';
+  const st = (mob ? document.getElementById('mob-flt-status') : document.getElementById('flt-status'))?.value || document.getElementById('flt-status')?.value || '';
   return bets.filter(b=>{
     if(q && !b.player.toLowerCase().includes(q) && !b.market.toLowerCase().includes(q)) return false;
     if(mkt && b.market !== mkt) return false;
@@ -440,10 +510,18 @@ function deleteBet(id){
 function populateFilters(){
   const markets=[...new Set(bets.map(b=>b.market))].sort();
   const books=[...new Set(bets.map(b=>b.book))].sort();
-  const ms=document.getElementById('flt-market'), mVal=ms.value;
-  const bs=document.getElementById('flt-book'), bVal=bs.value;
-  ms.innerHTML='<option value="">All markets</option>'+markets.map(m=>`<option${m===mVal?' selected':''}>${m}</option>`).join('');
-  bs.innerHTML='<option value="">All books</option>'+books.map(b=>`<option${b===bVal?' selected':''}>${b}</option>`).join('');
+  const opts=['flt-market','mob-flt-market'];
+  const bpts=['flt-book','mob-flt-book'];
+  opts.forEach(id=>{
+    const el=document.getElementById(id); if(!el) return;
+    const v=el.value;
+    el.innerHTML='<option value="">All markets</option>'+markets.map(m=>'<option'+(m===v?' selected':'')+'>'+m+'</option>').join('');
+  });
+  bpts.forEach(id=>{
+    const el=document.getElementById(id); if(!el) return;
+    const v=el.value;
+    el.innerHTML='<option value="">All books</option>'+books.map(b=>'<option'+(b===v?' selected':'')+'>'+b+'</option>').join('');
+  });
 }
 
 function updateMetrics(vis){
@@ -471,19 +549,64 @@ function renderFutures(){
   const tbody=document.getElementById('ftable-body');
   const nr=document.getElementById('no-results');
   updateMetrics(data);
-  if(!data.length){ tbody.innerHTML=''; nr.style.display='block'; return; }
+  if(!data.length){ tbody.innerHTML=''; nr.style.display='block'; renderBetCards([]); return; }
   nr.style.display='none';
-  tbody.innerHTML=data.map(b=>`
-    <tr>
-      <td><span class="market-tag">${b.market}</span></td>
-      <td style="color:var(--text)">${b.player}</td>
-      <td class="col-book mono">${b.book}</td>
-      <td class="odds">${b.odds}</td>
-      <td class="col-stake mono">${fmt(b.stake)}</td>
-      <td class="win-amt">${fmt(b.toWin)}</td>
-      <td><button class="status-btn status-${b.status}" onclick="cycleStatus(${b.id})">${b.status}</button></td>
-      <td><button class="del-btn" onclick="deleteBet(${b.id})" title="Remove">✕</button></td>
-    </tr>`).join('');
+  tbody.innerHTML=data.map(b=>{
+    return '<tr>'
+      +'<td><span class="market-tag">'+b.market+'</span></td>'
+      +'<td style="color:var(--text)">'+b.player+'</td>'
+      +'<td class="col-book mono">'+b.book+'</td>'
+      +'<td class="odds">'+b.odds+'</td>'
+      +'<td class="col-stake mono">'+fmt(b.stake)+'</td>'
+      +'<td class="win-amt">'+fmt(b.toWin)+'</td>'
+      +'<td><button class="status-btn status-'+b.status+'" onclick="cycleStatus('+b.id+')">'+b.status+'</button></td>'
+      +'<td><button class="del-btn" onclick="deleteBet('+b.id+')" title="Remove">✕</button></td>'
+      +'</tr>';
+  }).join('');
+  renderBetCards(data);
+}
+
+function renderBetCards(data){
+  const el=document.getElementById('bet-cards-list');
+  if(!el) return;
+  if(!data.length){
+    el.innerHTML='<div style="padding:2rem;text-align:center;color:var(--text3);font-size:13px;">No bets match your filters.</div>';
+    return;
+  }
+  el.innerHTML=data.map(b=>{
+    return '<div class="bet-card '+b.status+'">'
+      +'<div class="bet-card-top">'
+        +'<span class="market-tag">'+b.market+'</span>'
+        +'<div class="bet-card-actions">'
+          +'<button class="status-btn status-'+b.status+'" onclick="cycleStatus('+b.id+')" style="font-size:12px;padding:4px 12px;">'+b.status+'</button>'
+          +'<button class="del-btn" onclick="deleteBet('+b.id+')">✕</button>'
+        +'</div>'
+      +'</div>'
+      +'<div class="bet-card-mid"><div class="bet-card-player">'+b.player+'</div></div>'
+      +'<div class="bet-card-bot">'
+        +'<div class="bet-card-meta">'
+          +'<span>'+b.book+'</span>'
+          +'<span style="color:var(--text3)">·</span>'
+          +'<span style="color:var(--amber);font-family:var(--mono);font-weight:600;">'+b.odds+'</span>'
+          +'<span style="color:var(--text3)">·</span>'
+          +'<span>'+fmt(b.stake)+'</span>'
+        +'</div>'
+        +'<div class="bet-card-payout">'
+          +'<span class="pw">'+fmt(b.toWin)+'</span>'
+          +'<span class="po">to win</span>'
+        +'</div>'
+      +'</div>'
+    +'</div>';
+  }).join('');
+}
+
+function syncSearch(v){
+  const d=document.getElementById('search'); if(d) d.value=v;
+  renderFutures();
+}
+function syncStatus(v){
+  const d=document.getElementById('flt-status'); if(d) d.value=v;
+  renderFutures();
 }
 
 function openModal(){ document.getElementById('modal-bg').classList.add('open'); }
@@ -711,9 +834,217 @@ function switchPage(id, btn){
   document.querySelectorAll('.nav-tab').forEach(t=>t.classList.remove('on'));
   document.getElementById('page-'+id).classList.add('on');
   btn.classList.add('on');
+  if(id==='dashboard') renderDashboard();
+}
+
+
+// ──────────────────────────────────────────────────────────────
+//  DASHBOARD
+// ──────────────────────────────────────────────────────────────
+let chartInstances = {};
+
+function destroyChart(id) {
+  if (chartInstances[id]) { chartInstances[id].destroy(); delete chartInstances[id]; }
+}
+
+function renderDashboard() {
+  const all = bets;
+  const pending = all.filter(b => b.status === 'pending');
+  const wins    = all.filter(b => b.status === 'win');
+  const losses  = all.filter(b => b.status === 'loss');
+
+  const totalStaked  = all.reduce((a,b) => a+b.stake, 0);
+  const maxPayout    = all.reduce((a,b) => a+b.toWin, 0);
+  const wonAmt       = wins.reduce((a,b) => a+b.toWin, 0);
+  const lostAmt      = losses.reduce((a,b) => a+b.stake, 0);
+  const pnl          = wonAmt - lostAmt;
+  const pendingExp   = pending.reduce((a,b) => a+b.stake, 0);
+
+  // market exposure
+  const mktMap = {};
+  for (const b of all) {
+    if (!mktMap[b.market]) mktMap[b.market] = { stake:0, toWin:0, count:0 };
+    mktMap[b.market].stake  += b.stake;
+    mktMap[b.market].toWin  += b.toWin;
+    mktMap[b.market].count++;
+  }
+  const mktArr = Object.entries(mktMap).map(([m,v]) => ({market:m,...v}))
+    .sort((a,b) => b.toWin - a.toWin);
+  const topMkts = mktArr.slice(0, 10);
+
+  // book exposure
+  const bookMap = {};
+  for (const b of all) {
+    if (!bookMap[b.book]) bookMap[b.book] = { stake:0, count:0 };
+    bookMap[b.book].stake += b.stake;
+    bookMap[b.book].count++;
+  }
+  const bookArr = Object.entries(bookMap).map(([k,v]) => ({book:k,...v}))
+    .sort((a,b) => b.stake - a.stake);
+
+  // top bets by payout
+  const topBets = [...all].filter(b => b.status === 'pending')
+    .sort((a,b) => b.toWin - a.toWin).slice(0, 8);
+
+  // player exposure (unique players with most to win)
+  const playerMap = {};
+  for (const b of all) {
+    if (!playerMap[b.player]) playerMap[b.player] = { toWin:0, stake:0, count:0 };
+    playerMap[b.player].toWin  += b.toWin;
+    playerMap[b.player].stake  += b.stake;
+    playerMap[b.player].count++;
+  }
+  const playerArr = Object.entries(playerMap).map(([p,v]) => ({player:p,...v}))
+    .sort((a,b) => b.toWin - a.toWin).slice(0, 8);
+
+  const bookColors = ['#e8a928','#4f9cf0','#4caf7a','#e05252','#a78bfa','#f472b6','#38bdf8','#fb923c','#a3e635','#94a3b8'];
+
+  const html = `
+  <div style="margin-bottom:14px;display:flex;align-items:baseline;justify-content:space-between;flex-wrap:wrap;gap:8px;">
+    <div>
+      <div style="font-size:22px;font-weight:700;letter-spacing:-.02em;">Season Overview</div>
+      <div style="font-size:12px;color:var(--text3);margin-top:3px;">2026 MLB Futures · ${all.length} bets across ${Object.keys(bookMap).length} books</div>
+    </div>
+    <div style="font-size:12px;color:var(--text3);">${new Date().toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric'})}</div>
+  </div>
+
+  <!-- HERO METRICS -->
+  <div class="db-hero">
+    <div class="db-hero-card accent">
+      <div class="db-card-label">Max Payout</div>
+      <div class="db-big amber">$${Math.round(maxPayout).toLocaleString()}</div>
+      <div class="db-sub">if every pending bet wins</div>
+    </div>
+    <div class="db-hero-card">
+      <div class="db-card-label">Total Staked</div>
+      <div class="db-big">$${Math.round(totalStaked).toLocaleString()}</div>
+      <div class="db-sub">across all bets</div>
+    </div>
+    <div class="db-hero-card">
+      <div class="db-card-label">Net P&L</div>
+      <div class="db-big ${pnl>=0?'green':'red'}">${pnl>=0?'+':''}\$${Math.abs(Math.round(pnl)).toLocaleString()}</div>
+      <div class="db-sub">${pnl>=0?'realized profit':'realized loss'} so far</div>
+    </div>
+    <div class="db-hero-card">
+      <div class="db-card-label">Bet Status</div>
+      <div class="status-row">
+        <div class="status-pill"><div class="pill-num amber">${pending.length}</div><div class="pill-lbl">Pending</div></div>
+        <div class="db-divider"></div>
+        <div class="status-pill"><div class="pill-num green">${wins.length}</div><div class="pill-lbl">Wins</div></div>
+        <div class="db-divider"></div>
+        <div class="status-pill"><div class="pill-num red">${losses.length}</div><div class="pill-lbl">Losses</div></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ROW 2: Donut + Market bars -->
+  <div class="db-grid" style="margin-bottom:14px;">
+
+    <div class="db-card span4">
+      <div class="db-section-title">Stake by Status</div>
+      <div class="chart-wrap" style="height:200px;display:flex;align-items:center;justify-content:center;">
+        <canvas id="db-donut"></canvas>
+      </div>
+      <div style="display:flex;gap:16px;justify-content:center;flex-wrap:wrap;margin-top:12px;font-size:12px;color:var(--text3);">
+        <span style="display:flex;align-items:center;gap:5px;"><span style="width:9px;height:9px;border-radius:2px;background:var(--amber);display:inline-block;"></span>Pending $${Math.round(pendingExp).toLocaleString()}</span>
+        <span style="display:flex;align-items:center;gap:5px;"><span style="width:9px;height:9px;border-radius:2px;background:var(--green);display:inline-block;"></span>Won $${Math.round(wonAmt).toLocaleString()}</span>
+        <span style="display:flex;align-items:center;gap:5px;"><span style="width:9px;height:9px;border-radius:2px;background:var(--red);display:inline-block;"></span>Lost $${Math.round(lostAmt).toLocaleString()}</span>
+      </div>
+    </div>
+
+    <div class="db-card span8">
+      <div class="db-section-title">Top Markets by Potential Payout <span class="db-badge">${mktArr.length} markets</span></div>
+      <div class="db-bar-row">
+        ${topMkts.map(m => `
+          <div class="db-bar-item">
+            <div class="db-bar-meta">
+              <span class="lbl">${m.market}</span>
+              <span class="amt">$${Math.round(m.toWin).toLocaleString()}</span>
+            </div>
+            <div class="db-bar-track"><div class="db-bar-fill" style="width:${Math.round(m.toWin/topMkts[0].toWin*100)}%"></div></div>
+          </div>`).join('')}
+      </div>
+    </div>
+
+  </div>
+
+  <!-- ROW 3: Top bets + Player exposure + Books -->
+  <div class="db-grid">
+
+    <div class="db-card span6">
+      <div class="db-section-title">Biggest Pending Bets <span class="db-badge">by payout</span></div>
+      <div class="odds-grid">
+        ${topBets.map(b => `
+          <div class="odds-item">
+            <div class="o-player">${b.player}</div>
+            <div class="o-market">${b.market}</div>
+            <div><span class="o-win">$${Math.round(b.toWin).toLocaleString()}</span><span class="o-odds">${b.odds}</span></div>
+          </div>`).join('')}
+      </div>
+    </div>
+
+    <div class="db-card span3">
+      <div class="db-section-title">Player Exposure <span class="db-badge">total to win</span></div>
+      <ul class="db-list">
+        ${playerArr.map((p,i) => `
+          <li>
+            <span style="font-size:11px;color:var(--text3);width:16px;flex-shrink:0;">${i+1}</span>
+            <span class="name">${p.player}</span>
+            <span class="sub2">${p.count} bet${p.count>1?'s':''}</span>
+            <span class="val">$${Math.round(p.toWin).toLocaleString()}</span>
+          </li>`).join('')}
+      </ul>
+    </div>
+
+    <div class="db-card span3">
+      <div class="db-section-title">Book Exposure <span class="db-badge">staked</span></div>
+      <ul class="db-list">
+        ${bookArr.map((b,i) => `
+          <li>
+            <span class="book-dot" style="background:${bookColors[i%bookColors.length]}"></span>
+            <span class="name">${b.book}</span>
+            <span class="sub2">${b.count}</span>
+            <span class="val">$${b.stake.toFixed(2)}</span>
+          </li>`).join('')}
+      </ul>
+    </div>
+
+  </div>
+  `;
+
+  const el = document.getElementById('db-content');
+  el.innerHTML = html;
+
+  // Donut chart
+  destroyChart('db-donut');
+  const ctx = document.getElementById('db-donut');
+  if (ctx) {
+    chartInstances['db-donut'] = new Chart(ctx, {
+      type: 'doughnut',
+      data: {
+        labels: ['Pending','Won','Lost'],
+        datasets: [{
+          data: [Math.round(pendingExp*100)/100, Math.round(wonAmt*100)/100, Math.round(lostAmt*100)/100],
+          backgroundColor: ['#e8a928','#4caf7a','#e05252'],
+          borderColor: '#181818',
+          borderWidth: 3,
+          hoverOffset: 6
+        }]
+      },
+      options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        cutout: '72%',
+        plugins: { legend: { display: false }, tooltip: {
+          callbacks: { label: ctx => ' $' + ctx.parsed.toLocaleString() }
+        }},
+      }
+    });
+  }
 }
 
 // ── INIT ──
+renderDashboard();
 renderFutures();
 renderStats();
 </script>
