@@ -393,7 +393,6 @@ const RAW_BETS = [
   {market:"AL MVP",player:"Tarik Skubal",book:"Caesars",odds:"+5000",stake:5.00,toWin:250.00,status:"pending"},
   {market:"AL MVP",player:"Tarik Skubal",book:"Hard Rock",odds:"+5000",stake:10.00,toWin:500.00,status:"pending"},
   {market:"AL Rookie of the Year",player:"Kevin McGonigle",book:"Straightslate",odds:"+800",stake:100.00,toWin:800.00,status:"pending"},
-  {market:"AL Rookie of the Year",player:"Carter Jensen",book:"Caesars",odds:"+1600",stake:50.75,toWin:812.00,status:"pending"},
   {market:"MLB Best Record",player:"Philadelphia Phillies",book:"Circa",odds:"+2800",stake:40.00,toWin:1120.00,status:"pending"},
   {market:"MLB Doubles Leader",player:"Brent Rooker",book:"Bet365",odds:"+7000",stake:10.00,toWin:700.00,status:"pending"},
   {market:"MLB Doubles Leader",player:"Bryan Reynolds",book:"Bet365",odds:"+8000",stake:10.00,toWin:800.00,status:"pending"},
@@ -470,7 +469,7 @@ const RAW_BETS = [
 ];
 
 // ── persistent state in localStorage ──
-const STORAGE_KEY = 'mlb2026_bets_v1';
+const STORAGE_KEY = 'mlb2026_bets_v2';
 function loadBets() {
   try { const s = localStorage.getItem(STORAGE_KEY); return s ? JSON.parse(s) : null; } catch(e){ return null; }
 }
@@ -818,7 +817,7 @@ async function loadStats(){
         for (const t of (rec.teamRecords||[])) {
           all.push({
             name: t.team?.name||'?',
-            abbrev: t.team?.abbreviation||'?',
+            abbrev: t.team?.abbreviation||t.team?.abbrev||'?', abbrev2: t.team?.fileCode?.toUpperCase()||'',
             w: t.wins, l: t.losses,
             pct: t.winningPercentage,
             gb: t.gamesBack,
@@ -854,50 +853,8 @@ async function loadStats(){
     }
   } catch(e){}
 
-  // 5. Fetch yesterday's game logs for my players
-  try {
-    const yesterday = new Date(); yesterday.setDate(yesterday.getDate()-1);
-    const yd = yesterday.toISOString().slice(0,10);
-    dailyData = {};
-    const myUniqPlayers = [...new Set(MY_PICKS.map(p=>p.player))];
-
-    // Fetch hitting game logs
-    const hlog = await fetch('https://bdfed.stitch.mlbinfra.com/bdfed/stats/player?env=prod&season=2026&sportId=1&stats=gameLog&group=hitting&gameType=R&limit=500&sortStat=date&order=desc');
-    if (hlog.ok) {
-      const hj = await hlog.json();
-      for (const s of (hj.stats||[])) {
-        if ((s.date||'').slice(0,10) !== yd) continue;
-        const n = normName(s.playerFullName||(s.playerFirstName+' '+s.playerLastName)||'');
-        if (myUniqPlayers.some(p=>nameMatch(p,n)||normName(p)===n)) {
-          dailyData[n] = {
-            name: s.playerFullName||(s.playerFirstName+' '+s.playerLastName),
-            group:'hitting', date:s.date,
-            ab:+(s.atBats||0), h:+(s.hits||0), hr:+(s.homeRuns||0),
-            rbi:+(s.rbi||0), sb:+(s.stolenBases||0), bb:+(s.baseOnBalls||0),
-            avg:s.avg||'.000'
-          };
-        }
-      }
-    }
-    // Fetch pitching game logs
-    const plog = await fetch('https://bdfed.stitch.mlbinfra.com/bdfed/stats/player?env=prod&season=2026&sportId=1&stats=gameLog&group=pitching&gameType=R&limit=500&sortStat=date&order=desc');
-    if (plog.ok) {
-      const pj = await plog.json();
-      for (const s of (pj.stats||[])) {
-        if ((s.date||'').slice(0,10) !== yd) continue;
-        const n = normName(s.playerFullName||(s.playerFirstName+' '+s.playerLastName)||'');
-        if (myUniqPlayers.some(p=>nameMatch(p,n)||normName(p)===n)) {
-          dailyData[n] = {
-            name: s.playerFullName||(s.playerFirstName+' '+s.playerLastName),
-            group:'pitching', date:s.date,
-            ip:s.inningsPitched||'0.0', k:+(s.strikeOuts||0),
-            w:+(s.wins||0), er:+(s.earnedRuns||0), h:+(s.hits||0),
-            era:s.era||'—'
-          };
-        }
-      }
-    }
-  } catch(e){}
+  // 5. Fetch recent game logs for my players
+  await fetchDailyData();
 
   const t=new Date().toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'});
   if(failed===statCats.length){
@@ -999,8 +956,16 @@ function renderRecords(el){
   }
 
   function teamRow(t, idx){
-    const isMine = MY_TEAM_BETS.some(b => b.abbrev===t.abbrev || nameMatch(b.team, t.name));
-    const myBet  = MY_TEAM_BETS.find(b => b.abbrev===t.abbrev || nameMatch(b.team, t.name));
+    function teamMatches(b, t){
+      // Try exact abbrev, then full name, then last-word of team name (e.g. "Phillies", "Twins")
+      if(b.abbrev && (b.abbrev===t.abbrev||b.abbrev===t.abbrev2)) return true;
+      if(nameMatch(b.team, t.name)) return true;
+      const lastWord = b.team.split(' ').pop().toLowerCase();
+      if(lastWord.length>3 && t.name.toLowerCase().includes(lastWord)) return true;
+      return false;
+    }
+    const isMine = MY_TEAM_BETS.some(b => teamMatches(b, t));
+    const myBet  = MY_TEAM_BETS.find(b => teamMatches(b, t));
     return '<tr class="'+(isMine?'rec-mine':'')+'">'
       +'<td style="width:30px;font-size:12px;color:var(--text3);font-family:var(--mono)">'+(idx+1)+'</td>'
       +'<td>'+(isMine?'<span class="rec-dot"></span>':'')+t.name+'</td>'
@@ -1059,6 +1024,55 @@ function renderStatSummary(el){
       +'</table></div>';
   }
   el.innerHTML=html||'<div class="state-msg">No quantifiable picks found.</div>';
+}
+
+async function fetchDailyData(){
+  // Check yesterday and today to handle timezone edge cases
+  const dates = [];
+  const now = new Date();
+  for(let i=0;i<=1;i++){const d=new Date(now);d.setDate(d.getDate()-i);dates.push(d.toISOString().slice(0,10));}
+  dailyData={};
+  const myUniqPlayers=[...new Set(MY_PICKS.map(p=>p.player))];
+  function playerName(s){ return s.playerFullName||(s.playerFirstName&&s.playerLastName?(s.playerFirstName+' '+s.playerLastName):null)||''; }
+  function getDateStr(s){ return (s.date||s.gameDate||s.gameDateStr||'').slice(0,10); }
+  try{
+    // Hitting logs
+    const hurl='https://bdfed.stitch.mlbinfra.com/bdfed/stats/player?env=prod&season=2026&sportId=1&stats=gameLog&group=hitting&gameType=R&limit=500&order=desc';
+    const hr=await fetch(hurl);
+    if(hr.ok){
+      const hj=await hr.json();
+      for(const s of (hj.stats||[])){
+        const ds=getDateStr(s); if(!dates.includes(ds)) continue;
+        const n=normName(playerName(s));
+        if(!n||!myUniqPlayers.some(p=>normName(p)===n||nameMatch(p,playerName(s)))) continue;
+        dailyData[n]={name:playerName(s),group:'hitting',date:ds,
+          ab:+(s.atBats||0),h:+(s.hits||0),hr:+(s.homeRuns||0),
+          rbi:+(s.rbi||0),sb:+(s.stolenBases||0),bb:+(s.baseOnBalls||0),avg:s.avg||'.000'};
+      }
+    }
+    // Pitching logs
+    const purl='https://bdfed.stitch.mlbinfra.com/bdfed/stats/player?env=prod&season=2026&sportId=1&stats=gameLog&group=pitching&gameType=R&limit=500&order=desc';
+    const pr=await fetch(purl);
+    if(pr.ok){
+      const pj=await pr.json();
+      for(const s of (pj.stats||[])){
+        const ds=getDateStr(s); if(!dates.includes(ds)) continue;
+        const n=normName(playerName(s));
+        if(!n||!myUniqPlayers.some(p=>normName(p)===n||nameMatch(p,playerName(s)))) continue;
+        dailyData[n]={name:playerName(s),group:'pitching',date:ds,
+          ip:s.inningsPitched||'0.0',k:+(s.strikeOuts||0),
+          w:+(s.wins||0),er:+(s.earnedRuns||0),h:+(s.hits||0),era:s.era||'—'};
+      }
+    }
+  }catch(e){}
+}
+
+async function refreshDaily(){
+  const btn=document.getElementById('daily-rfbtn');
+  if(btn){btn.disabled=true;btn.textContent='↻ Loading...';}
+  await fetchDailyData();
+  renderDashboard();
+  if(btn){btn.disabled=false;btn.textContent='↻ Refresh';}
 }
 
 function renderStats(){ renderStatTabs(); renderStatContent(); }
@@ -1217,7 +1231,7 @@ function renderDashboard() {
     // Daily summary
     +'<div class="db-grid" style="margin-bottom:14px;">'
       +'<div class="db-card span12">'
-        +'<div class="db-section-title">Yesterday\'s Performance <span class="db-badge">'+ydStr+'</span></div>'
+        +'<div class="db-section-title">Recent Performance <span class="db-badge">'+ydStr+'</span><button id="daily-rfbtn" onclick="refreshDaily()" style="margin-left:auto;font-size:11px;padding:3px 10px;border-radius:var(--radius);border:1px solid var(--border2);background:var(--bg3);color:var(--amber);cursor:pointer;font-family:var(--font);">↻ Refresh</button></div>'
         +dailySection
       +'</div>'
     +'</div>'
