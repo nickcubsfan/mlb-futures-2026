@@ -261,6 +261,20 @@
     .odds-grid { grid-template-columns: 1fr; }
   }
 
+
+  /* injury + daily summary */
+  .inj-tag { font-size:10px; padding:1px 6px; border-radius:4px; background:rgba(224,82,82,0.15); color:var(--red); font-weight:600; margin-left:6px; }
+  .daily-card { background:var(--bg3); border-radius:var(--radius); padding:10px 12px; display:flex; flex-direction:column; gap:4px; border-left:3px solid var(--border2); }
+  .daily-card.good  { border-left-color:var(--green); }
+  .daily-card.bad   { border-left-color:var(--red); }
+  .daily-card.ok    { border-left-color:var(--amber); }
+  .daily-name { font-size:13px; font-weight:600; color:var(--text); }
+  .daily-line { font-size:12px; color:var(--text2); }
+  .daily-stat { font-size:12px; font-family:var(--mono); font-weight:600; }
+  .daily-stat.good { color:var(--green); }
+  .daily-stat.bad  { color:var(--red); }
+  .rec-mine { background:rgba(232,169,40,0.06); }
+  .rec-dot  { display:inline-block; width:6px; height:6px; border-radius:50%; background:var(--amber); margin-right:6px; vertical-align:middle; position:relative; top:-1px; }
 </style>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.js"></script>
 </head>
@@ -585,11 +599,9 @@ function renderBetCards(data){
       +'<div class="bet-card-mid"><div class="bet-card-player">'+b.player+'</div></div>'
       +'<div class="bet-card-bot">'
         +'<div class="bet-card-meta">'
-          +'<span>'+b.book+'</span>'
-          +'<span style="color:var(--text3)">·</span>'
-          +'<span style="color:var(--amber);font-family:var(--mono);font-weight:600;">'+b.odds+'</span>'
-          +'<span style="color:var(--text3)">·</span>'
-          +'<span>'+fmt(b.stake)+'</span>'
+          +'<span style="background:var(--bg3);border:1px solid var(--border2);border-radius:4px;padding:2px 7px;font-size:11px;color:var(--text2);">'+b.book+'</span>'
+          +'<span style="color:var(--amber);font-family:var(--mono);font-weight:600;font-size:12px;">'+b.odds+'</span>'
+          +'<span style="color:var(--text3);font-size:12px;">'+fmt(b.stake)+'</span>'
         +'</div>'
         +'<div class="bet-card-payout">'
           +'<span class="pw">'+fmt(b.toWin)+'</span>'
@@ -679,6 +691,12 @@ const MY_PICKS = [
   {cat:'runs',player:'Roman Anthony'},
 ];
 
+// Team bets for records section
+const MY_TEAM_BETS = [
+  {market:'MLB Best Record',  team:'Philadelphia Phillies', abbrev:'PHI'},
+  {market:'MLB Worst Record', team:'Minnesota Twins',       abbrev:'MIN'},
+];
+
 const STAT_CATS = [
   {id:'summary',                                                          label:'My Picks'},
   {id:'homeRuns',   group:'hitting',  sortStat:'homeRuns',               label:'Home Runs',  sl:'HR'},
@@ -691,6 +709,7 @@ const STAT_CATS = [
   {id:'wins',       group:'pitching', sortStat:'wins',                   label:'Wins',       sl:'W'},
   {id:'strikeouts', group:'pitching', sortStat:'strikeOuts',             label:'Strikeouts', sl:'K'},
   {id:'saves',      group:'pitching', sortStat:'saves',                  label:'Saves',      sl:'SV'},
+  {id:'records',                                                          label:'Records'},
 ];
 
 const ALIASES = {'kick kurtz':'nick kurtz'};
@@ -702,6 +721,28 @@ function nameMatch(a,b){return normName(a)===normName(b);}
 
 let apiData={};
 let activeStatTab='summary';
+let injuredPlayers = new Set(); // player names on IL
+let standingsData = {best:[], worst:[]};
+let dailyData = {}; // {playerName: {hits,hr,rbi,...,ip,k,w}}
+let playerStatsCache = {}; // {cat.id: {playerName: {value,team}}}
+
+// ── Convert American odds string to implied probability ──
+function oddsToImplied(odds) {
+  const n = parseInt(odds);
+  if (isNaN(n)) return 0.5;
+  return n > 0 ? 100/(n+100) : Math.abs(n)/(Math.abs(n)+100);
+}
+function impliedToOdds(p) {
+  if (p <= 0 || p >= 1) return '+100';
+  if (p > 0.5) { const x = Math.round(p/(1-p)*100); return '-'+x; }
+  const x = Math.round((1-p)/p*100); return '+'+x;
+}
+function avgOdds(oddsArr) {
+  const valid = oddsArr.filter(o => o && o !== '—');
+  if (!valid.length) return '—';
+  const avg = valid.reduce((a,o) => a+oddsToImplied(o), 0)/valid.length;
+  return impliedToOdds(avg);
+}
 
 async function loadStats(){
   const btn=document.getElementById('rfbtn');
@@ -711,44 +752,175 @@ async function loadStats(){
   const statCats=STAT_CATS.filter(c=>c.sl);
   let failed=0;
   apiData={};
+  playerStatsCache={};
+
+  // 1. Load leaderboards
   await Promise.all(statCats.map(async cat=>{
     try{
       const base='https://bdfed.stitch.mlbinfra.com/bdfed/stats/player';
-      const params=`?env=prod&season=2026&sportId=1&stats=season&group=${cat.group}&gameType=R&limit=40&offset=0&sortStat=${cat.sortStat}&order=desc`;
+      const params='?env=prod&season=2026&sportId=1&stats=season&group='+cat.group+'&gameType=R&limit=50&offset=0&sortStat='+cat.sortStat+'&order=desc';
       const res=await fetch(base+params);
-      if(!res.ok) throw new Error(`HTTP ${res.status}`);
+      if(!res.ok) throw new Error('HTTP '+res.status);
       const j=await res.json();
-      const rows=(j.stats||[]);
-      apiData[cat.id]=rows.map((l,i)=>({
+      apiData[cat.id]=(j.stats||[]).map((l,i)=>({
         rank:i+1,
-        name:l.playerFullName||l.playerFirstName+' '+l.playerLastName||'?',
+        name:l.playerFullName||(l.playerFirstName+' '+l.playerLastName)||'?',
         team:l.teamAbbrev||l.teamName||'—',
         value:+(l[cat.sortStat]||0)
       }));
-    }catch(e){
-      failed++;
-      apiData[cat.id]=[];
-    }
+    }catch(e){ failed++; apiData[cat.id]=[]; }
   }));
+
+  // 2. Fetch NR player stats individually
+  const nrFetches = [];
+  for (const cat of statCats) {
+    const picks = uniqPicks(picksFor(cat.id));
+    for (const p of picks) {
+      if (!getRanking(cat.id, p.player)) {
+        nrFetches.push({cat, player:p.player});
+      }
+    }
+  }
+  if (nrFetches.length) {
+    // Get all active players once (for ID lookup)
+    let allPlayers = [];
+    try {
+      const pr = await fetch('https://statsapi.mlb.com/api/v1/sports/1/players?season=2026&gameType=R');
+      if (pr.ok) { const pj = await pr.json(); allPlayers = pj.people||[]; }
+    } catch(e){}
+
+    await Promise.all(nrFetches.map(async ({cat, player})=>{
+      try {
+        const found = allPlayers.find(p2 => nameMatch(p2.fullName, player));
+        if (!found) return;
+        const group = cat.group;
+        const sr = await fetch('https://statsapi.mlb.com/api/v1/people/'+found.id+'/stats?stats=season&season=2026&group='+group+'&gameType=R&sportId=1');
+        if (!sr.ok) return;
+        const sj = await sr.json();
+        const splits = (sj.stats||[])[0]?.splits||[];
+        if (!splits.length) return;
+        const stat = splits[0].stat;
+        const teamAbbr = splits[0].team?.abbreviation || '—';
+        const val = stat[cat.sortStat] ?? stat['strikeOuts'] ?? 0;
+        if (!playerStatsCache[cat.id]) playerStatsCache[cat.id]={};
+        playerStatsCache[cat.id][normName(player)] = {value:+val, team:teamAbbr};
+      } catch(e){}
+    }));
+  }
+
+  // 3. Fetch standings (best/worst records)
+  try {
+    const sr = await fetch('https://statsapi.mlb.com/api/v1/standings?leagueId=103,104&season=2026&standingsType=regularSeason&sportId=1');
+    if (sr.ok) {
+      const sj = await sr.json();
+      let all = [];
+      for (const rec of (sj.records||[])) {
+        for (const t of (rec.teamRecords||[])) {
+          all.push({
+            name: t.team?.name||'?',
+            abbrev: t.team?.abbreviation||'?',
+            w: t.wins, l: t.losses,
+            pct: t.winningPercentage,
+            gb: t.gamesBack,
+            div: rec.division?.nameShort||rec.division?.name||''
+          });
+        }
+      }
+      all.sort((a,b)=>parseFloat(b.pct)-parseFloat(a.pct));
+      standingsData.best = all.slice(0,5);
+      standingsData.worst = [...all].reverse().slice(0,5);
+    }
+  } catch(e){}
+
+  // 4. Fetch IL transactions for injury tags
+  try {
+    const today = new Date().toISOString().slice(0,10);
+    const ir = await fetch('https://statsapi.mlb.com/api/v1/transactions?leagueId=103,104&sportId=1&startDate=2026-03-01&endDate='+today+'&transactionTypes=IL&limit=500');
+    if (ir.ok) {
+      const ij = await ir.json();
+      injuredPlayers = new Set();
+      for (const t of (ij.transactions||[])) {
+        const name = t.person?.fullName;
+        // only tag if not also transferred off IL more recently
+        if (name && t.typeCode && t.typeCode.includes('IL')) injuredPlayers.add(normName(name));
+      }
+      // Also remove players transferred back
+      for (const t of (ij.transactions||[])) {
+        const name = t.person?.fullName;
+        if (name && t.typeCode && (t.typeCode==='TA'||t.description?.toLowerCase().includes('activated'))) {
+          injuredPlayers.delete(normName(name));
+        }
+      }
+    }
+  } catch(e){}
+
+  // 5. Fetch yesterday's game logs for my players
+  try {
+    const yesterday = new Date(); yesterday.setDate(yesterday.getDate()-1);
+    const yd = yesterday.toISOString().slice(0,10);
+    dailyData = {};
+    const myUniqPlayers = [...new Set(MY_PICKS.map(p=>p.player))];
+
+    // Fetch hitting game logs
+    const hlog = await fetch('https://bdfed.stitch.mlbinfra.com/bdfed/stats/player?env=prod&season=2026&sportId=1&stats=gameLog&group=hitting&gameType=R&limit=500&sortStat=date&order=desc');
+    if (hlog.ok) {
+      const hj = await hlog.json();
+      for (const s of (hj.stats||[])) {
+        if ((s.date||'').slice(0,10) !== yd) continue;
+        const n = normName(s.playerFullName||(s.playerFirstName+' '+s.playerLastName)||'');
+        if (myUniqPlayers.some(p=>nameMatch(p,n)||normName(p)===n)) {
+          dailyData[n] = {
+            name: s.playerFullName||(s.playerFirstName+' '+s.playerLastName),
+            group:'hitting', date:s.date,
+            ab:+(s.atBats||0), h:+(s.hits||0), hr:+(s.homeRuns||0),
+            rbi:+(s.rbi||0), sb:+(s.stolenBases||0), bb:+(s.baseOnBalls||0),
+            avg:s.avg||'.000'
+          };
+        }
+      }
+    }
+    // Fetch pitching game logs
+    const plog = await fetch('https://bdfed.stitch.mlbinfra.com/bdfed/stats/player?env=prod&season=2026&sportId=1&stats=gameLog&group=pitching&gameType=R&limit=500&sortStat=date&order=desc');
+    if (plog.ok) {
+      const pj = await plog.json();
+      for (const s of (pj.stats||[])) {
+        if ((s.date||'').slice(0,10) !== yd) continue;
+        const n = normName(s.playerFullName||(s.playerFirstName+' '+s.playerLastName)||'');
+        if (myUniqPlayers.some(p=>nameMatch(p,n)||normName(p)===n)) {
+          dailyData[n] = {
+            name: s.playerFullName||(s.playerFirstName+' '+s.playerLastName),
+            group:'pitching', date:s.date,
+            ip:s.inningsPitched||'0.0', k:+(s.strikeOuts||0),
+            w:+(s.wins||0), er:+(s.earnedRuns||0), h:+(s.hits||0),
+            era:s.era||'—'
+          };
+        }
+      }
+    }
+  } catch(e){}
+
   const t=new Date().toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'});
   if(failed===statCats.length){
     lbl.innerHTML='<span class="err-msg">Could not reach MLB API. Check your connection and try again.</span>';
   } else if(failed>0){
-    lbl.textContent=`Partial data · Updated ${t} (${failed} categories unavailable)`;
+    lbl.textContent='Partial data · Updated '+t+' ('+failed+' categories unavailable)';
   } else {
-    lbl.textContent=`Live · Updated ${t}`;
+    lbl.textContent='Live · Updated '+t;
   }
   btn.disabled=false; btn.textContent='↻ Refresh';
   renderStats();
+  renderDashboard(); // refresh dashboard with new injury/daily data
 }
 
 function picksFor(cat){return MY_PICKS.filter(p=>p.cat===cat);}
 function uniqPicks(arr){const s=new Set(),r=[];for(const p of arr){if(!s.has(p.player)){s.add(p.player);r.push(p);}}return r;}
 function getRanking(cat,name){return (apiData[cat]||[]).find(l=>nameMatch(l.name,name))||null;}
+function getNRStat(catId, name){ return (playerStatsCache[catId]||{})[normName(name)]||null; }
+function isInjured(name){ return injuredPlayers.has(normName(name)); }
 
 function renderStatTabs(){
   document.getElementById('stat-tabs').innerHTML=STAT_CATS.map(c=>
-    `<button class="stb${c.id===activeStatTab?' on':''}" onclick="setStatTab('${c.id}')">${c.label}</button>`
+    '<button class="stb'+(c.id===activeStatTab?' on':'')+'" onclick="setStatTab(\''+c.id+'\')">'+c.label+'</button>'
   ).join('');
 }
 function setStatTab(id){activeStatTab=id;renderStatTabs();renderStatContent();}
@@ -756,6 +928,7 @@ function setStatTab(id){activeStatTab=id;renderStatTabs();renderStatContent();}
 function renderStatContent(){
   const el=document.getElementById('stat-content');
   if(activeStatTab==='summary'){renderStatSummary(el);return;}
+  if(activeStatTab==='records'){renderRecords(el);return;}
   const cat=STAT_CATS.find(c=>c.id===activeStatTab);
   const list=apiData[cat.id];
   const picks=uniqPicks(picksFor(cat.id));
@@ -763,39 +936,99 @@ function renderStatContent(){
 
   const chips=picks.map(p=>{
     const r=getRanking(cat.id,p.player);
-    if(!loaded) return `<span class="chip nr">${p.player} — loading</span>`;
-    if(!r) return `<span class="chip nr">${p.player} — not in top 35</span>`;
-    const need=p.milestone?p.milestone-r.value:null;
+    const nr=getNRStat(cat.id,p.player);
+    const inj=isInjured(p.player);
+    const injTag=inj?' <span class="inj-tag">IL</span>':'';
+    if(!loaded) return '<span class="chip nr">'+p.player+injTag+' — loading</span>';
+    const val = r ? r.value : (nr ? nr.value : null);
+    if(val===null) return '<span class="chip nr">'+p.player+injTag+' — NR</span>';
+    const rank = r ? '#'+r.rank : 'NR';
+    const need=p.milestone?p.milestone-val:null;
     const done=need!==null&&need<=0;
-    let extra=need!==null?(done?` · ${p.milestone} ✓`:` · needs ${need} more`):'' ;
-    return `<span class="chip${done?' done':''}">#${r.rank} ${p.player} — ${r.value} ${cat.sl}${extra}</span>`;
+    let extra=need!==null?(done?' · '+p.milestone+' \u2713':' · needs '+need+' more'):'';
+    return '<span class="chip'+(done?' done':(!r?' nr':''))+'">'+(r?'#'+r.rank:'NR')+' '+p.player+injTag+' — '+val+' '+cat.sl+extra+'</span>';
   }).join('');
 
   if(!loaded){
-    el.innerHTML=`<div class="picks-chips">${chips}</div><div class="state-msg">Press Refresh to load live data.</div>`;return;
+    el.innerHTML='<div class="picks-chips">'+chips+'</div><div class="state-msg">Press Refresh to load live data.</div>';return;
   }
   if(!list||!list.length){
-    el.innerHTML=`<div class="picks-chips">${chips}</div><div class="state-msg">No stats available yet — check back once games begin.</div>`;return;
+    el.innerHTML='<div class="picks-chips">'+chips+'</div><div class="state-msg">No stats available yet — check back once games begin.</div>';return;
   }
+
+  // Build leaderboard rows; append NR picks at bottom
+  const inLeaderboard = new Set(list.map(l=>normName(l.name)));
+  const nrRows = picks
+    .filter(p=>!getRanking(cat.id,p.player))
+    .map(p=>{
+      const nr=getNRStat(cat.id,p.player);
+      const inj=isInjured(p.player);
+      const injTag=inj?' <span class="inj-tag">IL</span>':'';
+      const val=nr?nr.value:'—';
+      const team=nr?nr.team:'—';
+      const ms=picks.find(pk=>nameMatch(pk.player,p.player)&&pk.milestone);
+      let msTag='';
+      if(ms&&nr){const need=ms.milestone-nr.value;msTag='<span class="ms-tag'+(need<=0?' done':'')+'">'+((need>0)?need+' to '+ms.milestone:ms.milestone+' \u2713')+'</span>';}
+      return '<tr class="lb-row-mine"><td class="rank" style="color:var(--text3)">NR</td><td><span class="dot"></span>'+p.player+injTag+msTag+'</td><td style="color:var(--text2);font-size:12px;width:46px">'+team+'</td><td class="lb-val" style="width:60px">'+val+'</td></tr>';
+    }).join('');
 
   const rows=list.map(l=>{
     const isMine=picks.some(p=>nameMatch(l.name,p.player));
+    const inj=isInjured(l.name);
+    const injTag=inj?' <span class="inj-tag">IL</span>':'';
     const ms=picks.find(p=>nameMatch(l.name,p.player)&&p.milestone);
     let msTag='';
-    if(ms){const need=ms.milestone-l.value;msTag=`<span class="ms-tag${need<=0?' done':''}">${need>0?need+' to '+ms.milestone:ms.milestone+' ✓'}</span>`;}
-    return `<tr class="${isMine?'lb-row-mine':''}">
-      <td class="rank">${l.rank}</td>
-      <td>${isMine?'<span class="dot"></span>':''}${l.name}${msTag}</td>
-      <td style="color:var(--text2);font-size:12px;width:46px">${l.team}</td>
-      <td class="lb-val" style="width:60px">${l.value}</td>
-    </tr>`;
+    if(ms){const need=ms.milestone-l.value;msTag='<span class="ms-tag'+(need<=0?' done':'')+'">'+((need>0)?need+' to '+ms.milestone:ms.milestone+' \u2713')+'</span>';}
+    return '<tr class="'+(isMine?'lb-row-mine':'')+'"><td class="rank">'+l.rank+'</td><td>'+(isMine?'<span class="dot"></span>':'')+l.name+injTag+msTag+'</td><td style="color:var(--text2);font-size:12px;width:46px">'+l.team+'</td><td class="lb-val" style="width:60px">'+l.value+'</td></tr>';
   }).join('');
 
-  el.innerHTML=`<div class="picks-chips">${chips||'<span style="font-size:12px;color:var(--text3)">No picks in this category</span>'}</div>
-  <div class="tbl-wrap"><table>
-    <thead><tr><th style="width:36px">#</th><th>Player</th><th style="width:46px">Team</th><th style="width:60px;text-align:right">${cat.sl}</th></tr></thead>
-    <tbody>${rows}</tbody>
-  </table></div>`;
+  const nrSection = nrRows ? '<tr><td colspan="4" style="font-size:11px;color:var(--text3);padding:8px 13px;text-transform:uppercase;letter-spacing:.05em;border-top:1px dashed var(--border)">Not ranked — season stats</td></tr>'+nrRows : '';
+
+  el.innerHTML='<div class="picks-chips">'+(chips||'<span style="font-size:12px;color:var(--text3)">No picks in this category</span>')+'</div>'
+    +'<div class="tbl-wrap"><table>'
+    +'<thead><tr><th style="width:36px">#</th><th>Player</th><th style="width:46px">Team</th><th style="width:60px;text-align:right">'+cat.sl+'</th></tr></thead>'
+    +'<tbody>'+rows+nrSection+'</tbody>'
+    +'</table></div>';
+}
+
+function renderRecords(el){
+  const loaded = standingsData.best.length > 0;
+  if(!loaded){
+    el.innerHTML='<div class="state-msg">Press Refresh to load standings data.</div>';
+    return;
+  }
+
+  function teamRow(t, idx){
+    const isMine = MY_TEAM_BETS.some(b => b.abbrev===t.abbrev || nameMatch(b.team, t.name));
+    const myBet  = MY_TEAM_BETS.find(b => b.abbrev===t.abbrev || nameMatch(b.team, t.name));
+    return '<tr class="'+(isMine?'rec-mine':'')+'">'
+      +'<td style="width:30px;font-size:12px;color:var(--text3);font-family:var(--mono)">'+(idx+1)+'</td>'
+      +'<td>'+(isMine?'<span class="rec-dot"></span>':'')+t.name+'</td>'
+      +'<td style="width:46px;font-size:12px;color:var(--text2)">'+t.abbrev+'</td>'
+      +'<td style="width:60px;font-family:var(--mono);font-size:13px;font-weight:600;text-align:right">'+t.w+'-'+t.l+'</td>'
+      +'<td style="width:50px;font-family:var(--mono);font-size:12px;color:var(--text2);text-align:right">'+parseFloat(t.pct||0).toFixed(3)+'</td>'
+      +(isMine?'<td style="width:80px"><span class="db-badge">'+myBet.market+'</span></td>':'<td style="width:80px"></td>')
+      +'</tr>';
+  }
+
+  el.innerHTML=
+    '<div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;">'
+    +'<div>'
+      +'<div class="sec-lbl" style="margin-top:0">Best Records</div>'
+      +'<div class="tbl-wrap"><table>'
+        +'<thead><tr><th style="width:30px">#</th><th>Team</th><th style="width:46px">ABV</th><th style="width:60px;text-align:right">W-L</th><th style="width:50px;text-align:right">PCT</th><th style="width:80px"></th></tr></thead>'
+        +'<tbody>'+standingsData.best.map((t,i)=>teamRow(t,i)).join('')+'</tbody>'
+      +'</table></div>'
+    +'</div>'
+    +'<div>'
+      +'<div class="sec-lbl" style="margin-top:0">Worst Records</div>'
+      +'<div class="tbl-wrap"><table>'
+        +'<thead><tr><th style="width:30px">#</th><th>Team</th><th style="width:46px">ABV</th><th style="width:60px;text-align:right">W-L</th><th style="width:50px;text-align:right">PCT</th><th style="width:80px"></th></tr></thead>'
+        +'<tbody>'+standingsData.worst.map((t,i)=>teamRow(t,i)).join('')+'</tbody>'
+      +'</table></div>'
+    +'</div>'
+    +'</div>'
+    +'<div style="margin-top:10px;font-size:12px;color:var(--text3);">Full standings across AL &amp; NL. Gold dot = your bet.</div>';
 }
 
 function renderStatSummary(el){
@@ -806,20 +1039,24 @@ function renderStatSummary(el){
     if(!picks.length) continue;
     const rows=picks.map(p=>{
       const r=getRanking(cat.id,p.player);
-      const rankTxt=loaded?(r?`#${r.rank}`:'NR'):'—';
-      let statTxt=loaded?(r?`${r.value} ${cat.sl}`:'—'):'—';
-      if(p.milestone&&r){const need=p.milestone-r.value;statTxt+=`<span class="ms-tag${need<=0?' done':''}" style="margin-left:6px">${need>0?need+' left':cat.sl+' ✓'}</span>`;}
-      return `<tr class="lb-row-mine">
-        <td>${p.player}</td>
-        <td style="text-align:right;color:var(--text2);font-family:var(--mono);font-size:12px;width:60px">${rankTxt}</td>
-        <td style="text-align:right;font-family:var(--mono);font-size:12px;font-weight:600;width:90px">${statTxt}</td>
-      </tr>`;
+      const nr=getNRStat(cat.id,p.player);
+      const inj=isInjured(p.player);
+      const injTag=inj?'<span class="inj-tag">IL</span>':'';
+      const rankTxt=loaded?(r?'#'+r.rank:(nr?'NR':'NR')):'—';
+      const val=r?r.value:(nr?nr.value:null);
+      let statTxt=loaded?(val!==null?val+' '+cat.sl:'—'):'—';
+      if(p.milestone&&val!==null){const need=p.milestone-val;statTxt+='<span class="ms-tag'+(need<=0?' done':'')+'" style="margin-left:6px">'+(need>0?need+' left':cat.sl+' \u2713')+'</span>';}
+      return '<tr class="lb-row-mine">'
+        +'<td>'+p.player+injTag+'</td>'
+        +'<td style="text-align:right;color:var(--text2);font-family:var(--mono);font-size:12px;width:60px">'+rankTxt+'</td>'
+        +'<td style="text-align:right;font-family:var(--mono);font-size:12px;font-weight:600;width:90px">'+statTxt+'</td>'
+        +'</tr>';
     }).join('');
-    html+=`<div class="sec-lbl">${cat.label}</div>
-    <div class="tbl-wrap" style="margin-bottom:14px"><table>
-      <thead><tr><th>Player</th><th style="text-align:right;width:60px">Rank</th><th style="text-align:right;width:90px">Stat</th></tr></thead>
-      <tbody>${rows}</tbody>
-    </table></div>`;
+    html+='<div class="sec-lbl">'+cat.label+'</div>'
+      +'<div class="tbl-wrap" style="margin-bottom:14px"><table>'
+        +'<thead><tr><th>Player</th><th style="text-align:right;width:60px">Rank</th><th style="text-align:right;width:90px">Stat</th></tr></thead>'
+        +'<tbody>'+rows+'</tbody>'
+      +'</table></div>';
   }
   el.innerHTML=html||'<div class="state-msg">No quantifiable picks found.</div>';
 }
@@ -829,20 +1066,33 @@ function renderStats(){ renderStatTabs(); renderStatContent(); }
 // ──────────────────────────────────────────────────────────────
 //  NAV
 // ──────────────────────────────────────────────────────────────
-function switchPage(id, btn){
+function isMobile(){ return window.innerWidth <= 640; }
+
+function switchPage(id, src){
   document.querySelectorAll('.page').forEach(p=>p.classList.remove('on'));
   document.querySelectorAll('.nav-tab').forEach(t=>t.classList.remove('on'));
+  document.querySelectorAll('.bnav-btn').forEach(t=>t.classList.remove('on'));
   document.getElementById('page-'+id).classList.add('on');
-  btn.classList.add('on');
+  const dt = document.getElementById('dt-'+id);
+  if(dt) dt.classList.add('on');
+  const bn = document.getElementById('bn-'+id);
+  if(bn) bn.classList.add('on');
   if(id==='dashboard') renderDashboard();
 }
 
+function syncSearch(v){
+  const d=document.getElementById('search'); if(d) d.value=v;
+  renderFutures();
+}
+function syncStatus(v){
+  const d=document.getElementById('flt-status'); if(d) d.value=v;
+  renderFutures();
+}
 
 // ──────────────────────────────────────────────────────────────
 //  DASHBOARD
 // ──────────────────────────────────────────────────────────────
 let chartInstances = {};
-
 function destroyChart(id) {
   if (chartInstances[id]) { chartInstances[id].destroy(); delete chartInstances[id]; }
 }
@@ -853,191 +1103,209 @@ function renderDashboard() {
   const wins    = all.filter(b => b.status === 'win');
   const losses  = all.filter(b => b.status === 'loss');
 
-  const totalStaked  = all.reduce((a,b) => a+b.stake, 0);
-  const maxPayout    = all.reduce((a,b) => a+b.toWin, 0);
-  const wonAmt       = wins.reduce((a,b) => a+b.toWin, 0);
-  const lostAmt      = losses.reduce((a,b) => a+b.stake, 0);
-  const pnl          = wonAmt - lostAmt;
-  const pendingExp   = pending.reduce((a,b) => a+b.stake, 0);
+  const totalStaked = all.reduce((a,b)=>a+b.stake,0);
+  const maxPayout   = all.reduce((a,b)=>a+b.toWin,0);
+  const wonAmt      = wins.reduce((a,b)=>a+b.toWin,0);
+  const lostAmt     = losses.reduce((a,b)=>a+b.stake,0);
+  const pnl         = wonAmt - lostAmt;
+  const pendingExp  = pending.reduce((a,b)=>a+b.stake,0);
 
-  // market exposure
+  // ── Market exposure ──
   const mktMap = {};
   for (const b of all) {
-    if (!mktMap[b.market]) mktMap[b.market] = { stake:0, toWin:0, count:0 };
-    mktMap[b.market].stake  += b.stake;
-    mktMap[b.market].toWin  += b.toWin;
+    if (!mktMap[b.market]) mktMap[b.market] = {stake:0,toWin:0,count:0};
+    mktMap[b.market].stake += b.stake;
+    mktMap[b.market].toWin += b.toWin;
     mktMap[b.market].count++;
   }
-  const mktArr = Object.entries(mktMap).map(([m,v]) => ({market:m,...v}))
-    .sort((a,b) => b.toWin - a.toWin);
-  const topMkts = mktArr.slice(0, 10);
+  const topMkts = Object.entries(mktMap).map(([m,v])=>({market:m,...v})).sort((a,b)=>b.toWin-a.toWin).slice(0,10);
 
-  // book exposure
+  // ── Book exposure ──
   const bookMap = {};
   for (const b of all) {
-    if (!bookMap[b.book]) bookMap[b.book] = { stake:0, count:0 };
-    bookMap[b.book].stake += b.stake;
-    bookMap[b.book].count++;
+    if (!bookMap[b.book]) bookMap[b.book]={stake:0,count:0};
+    bookMap[b.book].stake+=b.stake; bookMap[b.book].count++;
   }
-  const bookArr = Object.entries(bookMap).map(([k,v]) => ({book:k,...v}))
-    .sort((a,b) => b.stake - a.stake);
-
-  // top bets by payout
-  const topBets = [...all].filter(b => b.status === 'pending')
-    .sort((a,b) => b.toWin - a.toWin).slice(0, 8);
-
-  // player exposure (unique players with most to win)
-  const playerMap = {};
-  for (const b of all) {
-    if (!playerMap[b.player]) playerMap[b.player] = { toWin:0, stake:0, count:0 };
-    playerMap[b.player].toWin  += b.toWin;
-    playerMap[b.player].stake  += b.stake;
-    playerMap[b.player].count++;
-  }
-  const playerArr = Object.entries(playerMap).map(([p,v]) => ({player:p,...v}))
-    .sort((a,b) => b.toWin - a.toWin).slice(0, 8);
-
+  const bookArr = Object.entries(bookMap).map(([k,v])=>({book:k,...v})).sort((a,b)=>b.stake-a.stake);
   const bookColors = ['#e8a928','#4f9cf0','#4caf7a','#e05252','#a78bfa','#f472b6','#38bdf8','#fb923c','#a3e635','#94a3b8'];
 
-  const html = `
-  <div style="margin-bottom:14px;display:flex;align-items:baseline;justify-content:space-between;flex-wrap:wrap;gap:8px;">
-    <div>
-      <div style="font-size:22px;font-weight:700;letter-spacing:-.02em;">Season Overview</div>
-      <div style="font-size:12px;color:var(--text3);margin-top:3px;">2026 MLB Futures · ${all.length} bets across ${Object.keys(bookMap).length} books</div>
-    </div>
-    <div style="font-size:12px;color:var(--text3);">${new Date().toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric'})}</div>
-  </div>
+  // ── Combined bets: group by player+market, merge multi-book ──
+  const combinedMap = {};
+  for (const b of pending) {
+    const key = b.player+'|'+b.market;
+    if (!combinedMap[key]) combinedMap[key]={player:b.player,market:b.market,stake:0,toWin:0,books:[],oddsArr:[],inj:isInjured(b.player)};
+    combinedMap[key].stake  += b.stake;
+    combinedMap[key].toWin  += b.toWin;
+    combinedMap[key].books.push(b.book);
+    combinedMap[key].oddsArr.push(b.odds);
+  }
+  const combinedArr = Object.values(combinedMap).sort((a,b)=>b.toWin-a.toWin).slice(0,8);
 
-  <!-- HERO METRICS -->
-  <div class="db-hero">
-    <div class="db-hero-card accent">
-      <div class="db-card-label">Max Payout</div>
-      <div class="db-big amber">$${Math.round(maxPayout).toLocaleString()}</div>
-      <div class="db-sub">if every pending bet wins</div>
-    </div>
-    <div class="db-hero-card">
-      <div class="db-card-label">Total Staked</div>
-      <div class="db-big">$${Math.round(totalStaked).toLocaleString()}</div>
-      <div class="db-sub">across all bets</div>
-    </div>
-    <div class="db-hero-card">
-      <div class="db-card-label">Net P&L</div>
-      <div class="db-big ${pnl>=0?'green':'red'}">${pnl>=0?'+':''}\$${Math.abs(Math.round(pnl)).toLocaleString()}</div>
-      <div class="db-sub">${pnl>=0?'realized profit':'realized loss'} so far</div>
-    </div>
-    <div class="db-hero-card">
-      <div class="db-card-label">Bet Status</div>
-      <div class="status-row">
-        <div class="status-pill"><div class="pill-num amber">${pending.length}</div><div class="pill-lbl">Pending</div></div>
-        <div class="db-divider"></div>
-        <div class="status-pill"><div class="pill-num green">${wins.length}</div><div class="pill-lbl">Wins</div></div>
-        <div class="db-divider"></div>
-        <div class="status-pill"><div class="pill-num red">${losses.length}</div><div class="pill-lbl">Losses</div></div>
-      </div>
-    </div>
-  </div>
+  // ── Player exposure ──
+  const playerMap = {};
+  for (const b of all) {
+    if (!playerMap[b.player]) playerMap[b.player]={toWin:0,stake:0,count:0};
+    playerMap[b.player].toWin+=b.toWin; playerMap[b.player].stake+=b.stake; playerMap[b.player].count++;
+  }
+  const playerArr = Object.entries(playerMap).map(([p,v])=>({player:p,...v})).sort((a,b)=>b.toWin-a.toWin).slice(0,8);
 
-  <!-- ROW 2: Donut + Market bars -->
-  <div class="db-grid" style="margin-bottom:14px;">
+  // ── Daily summary ──
+  const dailyEntries = Object.values(dailyData);
+  const myPickNames = [...new Set(MY_PICKS.map(p=>normName(p.player)))];
+  const myDaily = dailyEntries.filter(d=>myPickNames.includes(normName(d.name)));
 
-    <div class="db-card span4">
-      <div class="db-section-title">Stake by Status</div>
-      <div class="chart-wrap" style="height:200px;display:flex;align-items:center;justify-content:center;">
-        <canvas id="db-donut"></canvas>
-      </div>
-      <div style="display:flex;gap:16px;justify-content:center;flex-wrap:wrap;margin-top:12px;font-size:12px;color:var(--text3);">
-        <span style="display:flex;align-items:center;gap:5px;"><span style="width:9px;height:9px;border-radius:2px;background:var(--amber);display:inline-block;"></span>Pending $${Math.round(pendingExp).toLocaleString()}</span>
-        <span style="display:flex;align-items:center;gap:5px;"><span style="width:9px;height:9px;border-radius:2px;background:var(--green);display:inline-block;"></span>Won $${Math.round(wonAmt).toLocaleString()}</span>
-        <span style="display:flex;align-items:center;gap:5px;"><span style="width:9px;height:9px;border-radius:2px;background:var(--red);display:inline-block;"></span>Lost $${Math.round(lostAmt).toLocaleString()}</span>
-      </div>
-    </div>
+  function dailyCard(d){
+    let score='', cls='ok', line='';
+    if(d.group==='hitting'){
+      const good = d.hr>0||d.h>=2||d.rbi>=2||d.sb>0;
+      const bad  = d.ab>=3&&d.h===0;
+      cls = good?'good':bad?'bad':'ok';
+      score = d.h+'-'+d.ab;
+      line = (d.hr>0?d.hr+' HR ':'')+
+             (d.rbi>0?d.rbi+' RBI ':'')+
+             (d.sb>0?d.sb+' SB ':'')+
+             (d.bb>0?d.bb+' BB ':'')+
+             (d.h===0&&d.ab>0?'0-'+d.ab+' \u2022 ':'');
+      line = line.trim()||score;
+    } else {
+      const good = d.w>0||(parseFloat(d.ip)>=6&&d.er<=2);
+      const bad  = d.er>=5||parseFloat(d.ip)<3;
+      cls = good?'good':bad?'bad':'ok';
+      score = d.ip+' IP, '+d.k+' K';
+      line = (d.w>0?'WIN \u2022 ':'')+d.ip+' IP \u2022 '+d.k+' K \u2022 '+d.er+' ER';
+    }
+    const injTag = isInjured(d.name)?'<span class="inj-tag">IL</span>':'';
+    return '<div class="daily-card '+cls+'">'
+      +'<div style="display:flex;align-items:center;justify-content:space-between;">'
+        +'<span class="daily-name">'+d.name+injTag+'</span>'
+        +'<span class="daily-stat '+cls+'">'+score+'</span>'
+      +'</div>'
+      +'<div class="daily-line">'+line+'</div>'
+    +'</div>';
+  }
 
-    <div class="db-card span8">
-      <div class="db-section-title">Top Markets by Potential Payout <span class="db-badge">${mktArr.length} markets</span></div>
-      <div class="db-bar-row">
-        ${topMkts.map(m => `
-          <div class="db-bar-item">
-            <div class="db-bar-meta">
-              <span class="lbl">${m.market}</span>
-              <span class="amt">$${Math.round(m.toWin).toLocaleString()}</span>
-            </div>
-            <div class="db-bar-track"><div class="db-bar-fill" style="width:${Math.round(m.toWin/topMkts[0].toWin*100)}%"></div></div>
-          </div>`).join('')}
-      </div>
-    </div>
+  const yesterday = new Date(); yesterday.setDate(yesterday.getDate()-1);
+  const ydStr = yesterday.toLocaleDateString('en-US',{weekday:'short',month:'short',day:'numeric'});
 
-  </div>
+  const dailySection = myDaily.length
+    ? '<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:8px;">'+myDaily.map(dailyCard).join('')+'</div>'
+    : '<div style="font-size:13px;color:var(--text3);padding:8px 0;">No game log data available yet — refresh after games are played.</div>';
 
-  <!-- ROW 3: Top bets + Player exposure + Books -->
-  <div class="db-grid">
+  const html =
+    '<div style="margin-bottom:14px;display:flex;align-items:baseline;justify-content:space-between;flex-wrap:wrap;gap:8px;">'
+      +'<div><div style="font-size:22px;font-weight:700;letter-spacing:-.02em;">Season Overview</div>'
+      +'<div style="font-size:12px;color:var(--text3);margin-top:3px;">2026 MLB Futures \u00b7 '+all.length+' bets across '+Object.keys(bookMap).length+' books</div></div>'
+      +'<div style="font-size:12px;color:var(--text3);">'+new Date().toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric'})+'</div>'
+    +'</div>'
 
-    <div class="db-card span6">
-      <div class="db-section-title">Biggest Pending Bets <span class="db-badge">by payout</span></div>
-      <div class="odds-grid">
-        ${topBets.map(b => `
-          <div class="odds-item">
-            <div class="o-player">${b.player}</div>
-            <div class="o-market">${b.market}</div>
-            <div><span class="o-win">$${Math.round(b.toWin).toLocaleString()}</span><span class="o-odds">${b.odds}</span></div>
-          </div>`).join('')}
-      </div>
-    </div>
+    // Hero metrics
+    +'<div class="db-hero">'
+      +'<div class="db-hero-card accent"><div class="db-card-label">Max Payout</div><div class="db-big amber">$'+Math.round(maxPayout).toLocaleString()+'</div><div class="db-sub">if all pending hits</div></div>'
+      +'<div class="db-hero-card"><div class="db-card-label">Total Staked</div><div class="db-big">$'+Math.round(totalStaked).toLocaleString()+'</div><div class="db-sub">across all bets</div></div>'
+      +'<div class="db-hero-card"><div class="db-card-label">Net P&amp;L</div><div class="db-big '+(pnl>=0?'green':'red')+'">'+(pnl>=0?'+':'')+'\$'+Math.abs(Math.round(pnl)).toLocaleString()+'</div><div class="db-sub">'+(pnl>=0?'realized profit':'realized loss')+'</div></div>'
+      +'<div class="db-hero-card"><div class="db-card-label">Bet Status</div>'
+        +'<div class="status-row">'
+          +'<div class="status-pill"><div class="pill-num amber">'+pending.length+'</div><div class="pill-lbl">Pending</div></div>'
+          +'<div class="db-divider"></div>'
+          +'<div class="status-pill"><div class="pill-num green">'+wins.length+'</div><div class="pill-lbl">Wins</div></div>'
+          +'<div class="db-divider"></div>'
+          +'<div class="status-pill"><div class="pill-num red">'+losses.length+'</div><div class="pill-lbl">Losses</div></div>'
+        +'</div>'
+      +'</div>'
+    +'</div>'
 
-    <div class="db-card span3">
-      <div class="db-section-title">Player Exposure <span class="db-badge">total to win</span></div>
-      <ul class="db-list">
-        ${playerArr.map((p,i) => `
-          <li>
-            <span style="font-size:11px;color:var(--text3);width:16px;flex-shrink:0;">${i+1}</span>
-            <span class="name">${p.player}</span>
-            <span class="sub2">${p.count} bet${p.count>1?'s':''}</span>
-            <span class="val">$${Math.round(p.toWin).toLocaleString()}</span>
-          </li>`).join('')}
-      </ul>
-    </div>
+    // Daily summary
+    +'<div class="db-grid" style="margin-bottom:14px;">'
+      +'<div class="db-card span12">'
+        +'<div class="db-section-title">Yesterday\'s Performance <span class="db-badge">'+ydStr+'</span></div>'
+        +dailySection
+      +'</div>'
+    +'</div>'
 
-    <div class="db-card span3">
-      <div class="db-section-title">Book Exposure <span class="db-badge">staked</span></div>
-      <ul class="db-list">
-        ${bookArr.map((b,i) => `
-          <li>
-            <span class="book-dot" style="background:${bookColors[i%bookColors.length]}"></span>
-            <span class="name">${b.book}</span>
-            <span class="sub2">${b.count}</span>
-            <span class="val">$${b.stake.toFixed(2)}</span>
-          </li>`).join('')}
-      </ul>
-    </div>
+    // Donut + Market bars
+    +'<div class="db-grid" style="margin-bottom:14px;">'
+      +'<div class="db-card span4">'
+        +'<div class="db-section-title">Stake by Status</div>'
+        +'<div class="chart-wrap" style="height:200px;display:flex;align-items:center;justify-content:center;"><canvas id="db-donut"></canvas></div>'
+        +'<div style="display:flex;gap:16px;justify-content:center;flex-wrap:wrap;margin-top:12px;font-size:12px;color:var(--text3);">'
+          +'<span style="display:flex;align-items:center;gap:5px;"><span style="width:9px;height:9px;border-radius:2px;background:var(--amber);display:inline-block;"></span>Pending $'+Math.round(pendingExp).toLocaleString()+'</span>'
+          +'<span style="display:flex;align-items:center;gap:5px;"><span style="width:9px;height:9px;border-radius:2px;background:var(--green);display:inline-block;"></span>Won $'+Math.round(wonAmt).toLocaleString()+'</span>'
+          +'<span style="display:flex;align-items:center;gap:5px;"><span style="width:9px;height:9px;border-radius:2px;background:var(--red);display:inline-block;"></span>Lost $'+Math.round(lostAmt).toLocaleString()+'</span>'
+        +'</div>'
+      +'</div>'
+      +'<div class="db-card span8">'
+        +'<div class="db-section-title">Top Markets by Potential Payout <span class="db-badge">'+topMkts.length+' shown</span></div>'
+        +'<div class="db-bar-row">'
+          +topMkts.map(m=>'<div class="db-bar-item"><div class="db-bar-meta"><span class="lbl">'+m.market+'</span><span class="amt">$'+Math.round(m.toWin).toLocaleString()+'</span></div><div class="db-bar-track"><div class="db-bar-fill" style="width:'+Math.round(m.toWin/topMkts[0].toWin*100)+'%"></div></div></div>').join('')
+        +'</div>'
+      +'</div>'
+    +'</div>'
 
-  </div>
-  `;
+    // Combined top bets + player exposure + books
+    +'<div class="db-grid">'
+      +'<div class="db-card span6">'
+        +'<div class="db-section-title">Biggest Pending Bets <span class="db-badge">combined lines</span></div>'
+        +'<div class="odds-grid">'
+          +combinedArr.map(b=>{
+            const avgOd = avgOdds(b.oddsArr);
+            const injTag = b.inj?'<span class="inj-tag" style="font-size:9px;margin-left:4px">IL</span>':'';
+            const multiBook = b.books.length>1?' <span style="font-size:10px;color:var(--text3);">('+b.books.length+' books)</span>':'';
+            return '<div class="odds-item">'
+              +'<div class="o-player">'+b.player+injTag+'</div>'
+              +'<div class="o-market">'+b.market+multiBook+'</div>'
+              +'<div><span class="o-win">$'+Math.round(b.toWin).toLocaleString()+'</span><span class="o-odds">'+avgOd+'</span></div>'
+              +'<div style="font-size:10px;color:var(--text3);margin-top:2px;">staked $'+b.stake.toFixed(2)+'</div>'
+            +'</div>';
+          }).join('')
+        +'</div>'
+      +'</div>'
+      +'<div class="db-card span3">'
+        +'<div class="db-section-title">Player Exposure <span class="db-badge">to win</span></div>'
+        +'<ul class="db-list">'
+          +playerArr.map((p,i)=>{
+            const inj=isInjured(p.player);
+            const injTag=inj?'<span class="inj-tag" style="font-size:9px;">IL</span>':'';
+            return '<li>'
+              +'<span style="font-size:11px;color:var(--text3);width:16px;flex-shrink:0;">'+(i+1)+'</span>'
+              +'<span class="name">'+p.player+injTag+'</span>'
+              +'<span class="sub2">'+p.count+' bet'+(p.count>1?'s':'')+'</span>'
+              +'<span class="val">$'+Math.round(p.toWin).toLocaleString()+'</span>'
+            +'</li>';
+          }).join('')
+        +'</ul>'
+      +'</div>'
+      +'<div class="db-card span3">'
+        +'<div class="db-section-title">Book Exposure <span class="db-badge">staked</span></div>'
+        +'<ul class="db-list">'
+          +bookArr.map((b,i)=>'<li>'
+            +'<span class="book-dot" style="background:'+bookColors[i%bookColors.length]+'"></span>'
+            +'<span class="name">'+b.book+'</span>'
+            +'<span class="sub2">'+b.count+'</span>'
+            +'<span class="val">$'+b.stake.toFixed(2)+'</span>'
+          +'</li>').join('')
+        +'</ul>'
+      +'</div>'
+    +'</div>';
 
   const el = document.getElementById('db-content');
   el.innerHTML = html;
 
-  // Donut chart
   destroyChart('db-donut');
   const ctx = document.getElementById('db-donut');
   if (ctx) {
     chartInstances['db-donut'] = new Chart(ctx, {
-      type: 'doughnut',
-      data: {
-        labels: ['Pending','Won','Lost'],
-        datasets: [{
-          data: [Math.round(pendingExp*100)/100, Math.round(wonAmt*100)/100, Math.round(lostAmt*100)/100],
-          backgroundColor: ['#e8a928','#4caf7a','#e05252'],
-          borderColor: '#181818',
-          borderWidth: 3,
-          hoverOffset: 6
+      type:'doughnut',
+      data:{
+        labels:['Pending','Won','Lost'],
+        datasets:[{
+          data:[Math.round(pendingExp*100)/100, Math.round(wonAmt*100)/100, Math.round(lostAmt*100)/100],
+          backgroundColor:['#e8a928','#4caf7a','#e05252'],
+          borderColor:'#181818', borderWidth:3, hoverOffset:6
         }]
       },
-      options: {
-        responsive: true,
-        maintainAspectRatio: false,
-        cutout: '72%',
-        plugins: { legend: { display: false }, tooltip: {
-          callbacks: { label: ctx => ' $' + ctx.parsed.toLocaleString() }
-        }},
+      options:{
+        responsive:true, maintainAspectRatio:false, cutout:'72%',
+        plugins:{legend:{display:false},tooltip:{callbacks:{label:ctx=>' $'+ctx.parsed.toLocaleString()}}}
       }
     });
   }
@@ -1047,6 +1315,7 @@ function renderDashboard() {
 renderDashboard();
 renderFutures();
 renderStats();
+
 </script>
 </body>
 </html>
