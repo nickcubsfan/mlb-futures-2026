@@ -466,6 +466,10 @@ const RAW_BETS = [
   {market:"World Baseball Classic MVP",player:"Bobby Witt Jr.",book:"Bovada",odds:"+2500",stake:40.00,toWin:1000.00,status:"loss"},
   {market:"World Baseball Classic MVP",player:"Bryce Harper",book:"Straightslate",odds:"+1800",stake:50.00,toWin:900.00,status:"loss"},
   {market:"World Series Winner",player:"Philadelphia Phillies",book:"Circa",odds:"+1600",stake:75.00,toWin:1200.00,status:"pending"},
+  {market:"NL Cy Young",player:"Sandy Alcantara",book:"Hard Rock",odds:"+2500",stake:10.00,toWin:250.00,status:"pending"},
+  {market:"NL Cy Young",player:"Sandy Alcantara",book:"Bovada",odds:"+2200",stake:30.00,toWin:660.00,status:"pending"},
+  {market:"NL MVP",player:"Konnor Griffin",book:"Bet365",odds:"+10000",stake:10.00,toWin:1000.00,status:"pending"},
+  {market:"AL Rookie of the Year",player:"Carter Jensen",book:"Fanatics",odds:"+1400",stake:60.00,toWin:840.00,status:"pending"},
 ];
 
 // ── persistent state in localStorage ──
@@ -1027,44 +1031,51 @@ function renderStatSummary(el){
 }
 
 async function fetchDailyData(){
-  // Check yesterday and today to handle timezone edge cases
-  const dates = [];
-  const now = new Date();
-  for(let i=0;i<=1;i++){const d=new Date(now);d.setDate(d.getDate()-i);dates.push(d.toISOString().slice(0,10));}
   dailyData={};
   const myUniqPlayers=[...new Set(MY_PICKS.map(p=>p.player))];
-  function playerName(s){ return s.playerFullName||(s.playerFirstName&&s.playerLastName?(s.playerFirstName+' '+s.playerLastName):null)||''; }
-  function getDateStr(s){ return (s.date||s.gameDate||s.gameDateStr||'').slice(0,10); }
+  // Try yesterday then day before (covers late games + timezone edge)
+  const datesToTry=[];
+  for(let i=1;i<=3;i++){const d=new Date();d.setDate(d.getDate()-i);datesToTry.push(d.toISOString().slice(0,10));}
   try{
-    // Hitting logs
-    const hurl='https://bdfed.stitch.mlbinfra.com/bdfed/stats/player?env=prod&season=2026&sportId=1&stats=gameLog&group=hitting&gameType=R&limit=500&order=desc';
-    const hr=await fetch(hurl);
-    if(hr.ok){
-      const hj=await hr.json();
-      for(const s of (hj.stats||[])){
-        const ds=getDateStr(s); if(!dates.includes(ds)) continue;
-        const n=normName(playerName(s));
-        if(!n||!myUniqPlayers.some(p=>normName(p)===n||nameMatch(p,playerName(s)))) continue;
-        dailyData[n]={name:playerName(s),group:'hitting',date:ds,
-          ab:+(s.atBats||0),h:+(s.hits||0),hr:+(s.homeRuns||0),
-          rbi:+(s.rbi||0),sb:+(s.stolenBases||0),bb:+(s.baseOnBalls||0),avg:s.avg||'.000'};
+    for(const dateStr of datesToTry){
+      const url='https://statsapi.mlb.com/api/v1/schedule?sportId=1&date='+dateStr+'&gameType=R&hydrate=boxscore(teams(players))';
+      const res=await fetch(url);
+      if(!res.ok) continue;
+      const j=await res.json();
+      let found=0;
+      for(const dateObj of (j.dates||[])){
+        for(const game of (dateObj.games||[])){
+          const bs=game.boxscore;
+          if(!bs) continue;
+          for(const side of ['home','away']){
+            const td=bs.teams?.[side];
+            if(!td) continue;
+            for(const [,pd] of Object.entries(td.players||{})){
+              const fullName=pd.person?.fullName||'';
+              if(!myUniqPlayers.some(p=>nameMatch(p,fullName))) continue;
+              const n=normName(fullName);
+              const hasPitch=pd.stats?.pitching?.inningsPitched!=null;
+              const hasBat=pd.stats?.batting?.atBats!=null;
+              if(hasPitch){
+                const ps=pd.stats.pitching;
+                dailyData[n]={name:fullName,group:'pitching',date:dateStr,
+                  ip:ps.inningsPitched||'0.0',k:+(ps.strikeOuts||0),
+                  w:+(ps.wins||0),er:+(ps.earnedRuns||0),h:+(ps.hits||0),era:ps.era||'—'};
+                found++;
+              } else if(hasBat){
+                const bat=pd.stats.batting;
+                dailyData[n]={name:fullName,group:'hitting',date:dateStr,
+                  ab:+(bat.atBats||0),h:+(bat.hits||0),hr:+(bat.homeRuns||0),
+                  rbi:+(bat.rbi||0),sb:+(bat.stolenBases||0),bb:+(bat.baseOnBalls||0),avg:bat.avg||'.000'};
+                found++;
+              }
+            }
+          }
+        }
       }
+      if(found>0) break; // got data for this date, stop looking back
     }
-    // Pitching logs
-    const purl='https://bdfed.stitch.mlbinfra.com/bdfed/stats/player?env=prod&season=2026&sportId=1&stats=gameLog&group=pitching&gameType=R&limit=500&order=desc';
-    const pr=await fetch(purl);
-    if(pr.ok){
-      const pj=await pr.json();
-      for(const s of (pj.stats||[])){
-        const ds=getDateStr(s); if(!dates.includes(ds)) continue;
-        const n=normName(playerName(s));
-        if(!n||!myUniqPlayers.some(p=>normName(p)===n||nameMatch(p,playerName(s)))) continue;
-        dailyData[n]={name:playerName(s),group:'pitching',date:ds,
-          ip:s.inningsPitched||'0.0',k:+(s.strikeOuts||0),
-          w:+(s.wins||0),er:+(s.earnedRuns||0),h:+(s.hits||0),era:s.era||'—'};
-      }
-    }
-  }catch(e){}
+  }catch(e){ console.warn('Daily data error:',e); }
 }
 
 async function refreshDaily(){
@@ -1199,7 +1210,9 @@ function renderDashboard() {
   }
 
   const yesterday = new Date(); yesterday.setDate(yesterday.getDate()-1);
-  const ydStr = yesterday.toLocaleDateString('en-US',{weekday:'short',month:'short',day:'numeric'});
+  const ydStr = Object.keys(dailyData).length>0
+    ? Object.values(dailyData)[0].date || yesterday.toLocaleDateString('en-US',{weekday:'short',month:'short',day:'numeric'})
+    : yesterday.toLocaleDateString('en-US',{weekday:'short',month:'short',day:'numeric'});
 
   const dailySection = myDaily.length
     ? '<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:8px;">'+myDaily.map(dailyCard).join('')+'</div>'
