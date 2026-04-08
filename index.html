@@ -30,10 +30,12 @@
     --radius-lg: 12px;
   }
   * { box-sizing: border-box; margin: 0; padding: 0; }
-  body { background: var(--bg); color: var(--text); font-family: var(--font); font-size: 14px; min-height: 100vh; }
+  html { overscroll-behavior: contain; }
+  body { background: var(--bg); color: var(--text); font-family: var(--font); font-size: 14px; min-height: 100vh; overscroll-behavior-y: contain; overflow-x: hidden; }
 
   /* TOP NAV */
-  .topnav { background: var(--bg2); border-bottom: 1px solid var(--border); padding: 0 24px; display: flex; align-items: center; gap: 0; position: sticky; top: 0; z-index: 50; }
+  .topnav { background: var(--bg2); border-bottom: 1px solid var(--border); padding: 0 24px; display: flex; align-items: center; gap: 0; position: sticky; top: 0; z-index: 50; overflow-x: auto; -webkit-overflow-scrolling: touch; scrollbar-width: none; }
+  .topnav::-webkit-scrollbar { display: none; }
   .topnav .logo { font-size: 15px; font-weight: 600; color: var(--text); letter-spacing: -.02em; padding: 16px 0; margin-right: 32px; white-space: nowrap; }
   .topnav .logo span { color: var(--amber); }
   .nav-tabs { display: flex; gap: 0; }
@@ -72,7 +74,7 @@
   .add-btn:hover { background: var(--amber-bg); }
 
   /* TABLE */
-  .tbl-wrap { border: 1px solid var(--border); border-radius: var(--radius-lg); overflow: hidden; overflow-x: auto; }
+  .tbl-wrap { border: 1px solid var(--border); border-radius: var(--radius-lg); overflow: hidden; overflow-x: auto; -webkit-overflow-scrolling: touch; overscroll-behavior-x: contain; }
   table { width: 100%; border-collapse: collapse; font-size: 13px; min-width: 700px; }
   thead th {
     text-align: left; padding: 9px 13px; font-size: 11px; font-weight: 500;
@@ -151,7 +153,8 @@
   .rfbtn:hover { background: var(--amber-bg); }
   .rfbtn:disabled { opacity: 0.4; pointer-events: none; }
 
-  .stat-tabs-wrap { overflow-x: auto; margin-bottom: 16px; }
+  .stat-tabs-wrap { overflow-x: auto; margin-bottom: 16px; -webkit-overflow-scrolling: touch; overscroll-behavior-x: contain; scrollbar-width: none; }
+  .stat-tabs-wrap::-webkit-scrollbar { display: none; }
   .stat-tabs { display: flex; border-bottom: 1px solid var(--border); white-space: nowrap; }
   .stb {
     font-size: 12px; padding: 9px 14px; border: none; border-bottom: 2px solid transparent;
@@ -315,6 +318,7 @@
     .ticker-logo { width: 20px; height: 20px; }
     .ticker-scores { font-size: 12px; }
     .ticker-abbr { font-size: 9px; }
+    .ticker-inner { animation-duration: 5s !important; }
   }
 
   /* Player bet drawer */
@@ -403,6 +407,23 @@
   @media(max-width:540px){
     .db-card.span3 { grid-column: span 12; }
     .odds-grid { grid-template-columns: 1fr; }
+  }
+  @media(max-width:640px){
+    table { min-width: 0; font-size: 12px; }
+    thead th { padding: 7px 8px; font-size: 10px; }
+    tbody td { padding: 6px 8px; }
+    /* Rank col */
+    .rank { width: 24px !important; font-size: 11px; }
+    /* Team col */
+    td[style*="width:46px"] { width: 32px !important; font-size: 10px; }
+    /* Stat val col */
+    .lb-val { width: 44px !important; font-size: 12px; }
+    /* Hide expand icon on very small screens — drawer still works on tap */
+    td[style*="display:flex"] { padding: 6px 8px !important; gap: 4px !important; }
+    /* Futures table */
+    .col-odds { min-width: 0; }
+    /* Daily cards grid */
+    .daily-card { padding: 8px 10px; }
   }
 
 
@@ -993,9 +1014,45 @@ async function loadStats(){
       let all = [];
       for (const rec of (sj.records||[])) {
         for (const t of (rec.teamRecords||[])) {
+          const tName = t.team?.name||'?';
+          const ABBR_FROM_NAME = {
+            'Arizona Diamondbacks':'AZ','Diamondbacks':'AZ',
+            'Atlanta Braves':'ATL','Braves':'ATL',
+            'Baltimore Orioles':'BAL','Orioles':'BAL',
+            'Boston Red Sox':'BOS','Red Sox':'BOS',
+            'Chicago Cubs':'CHC','Cubs':'CHC',
+            'Chicago White Sox':'CWS','White Sox':'CWS',
+            'Cincinnati Reds':'CIN','Reds':'CIN',
+            'Cleveland Guardians':'CLE','Guardians':'CLE',
+            'Colorado Rockies':'COL','Rockies':'COL',
+            'Detroit Tigers':'DET','Tigers':'DET',
+            'Houston Astros':'HOU','Astros':'HOU',
+            'Kansas City Royals':'KC','Royals':'KC',
+            'Los Angeles Angels':'LAA','Angels':'LAA','LA Angels':'LAA',
+            'Los Angeles Dodgers':'LAD','Dodgers':'LAD','LA Dodgers':'LAD',
+            'Miami Marlins':'MIA','Marlins':'MIA',
+            'Milwaukee Brewers':'MIL','Brewers':'MIL',
+            'Minnesota Twins':'MIN','Twins':'MIN',
+            'New York Mets':'NYM','Mets':'NYM',
+            'New York Yankees':'NYY','Yankees':'NYY',
+            'Oakland Athletics':'ATH','Athletics':'ATH',
+            'Philadelphia Phillies':'PHI','Phillies':'PHI',
+            'Pittsburgh Pirates':'PIT','Pirates':'PIT',
+            'San Diego Padres':'SD','Padres':'SD',
+            'San Francisco Giants':'SF','Giants':'SF',
+            'Seattle Mariners':'SEA','Mariners':'SEA',
+            'St. Louis Cardinals':'STL','Cardinals':'STL',
+            'Tampa Bay Rays':'TB','Rays':'TB',
+            'Texas Rangers':'TEX','Rangers':'TEX',
+            'Toronto Blue Jays':'TOR','Blue Jays':'TOR',
+            'Washington Nationals':'WSH','Nationals':'WSH'
+          };
+          const rawAbbr = t.team?.abbreviation||t.team?.abbrev||'';
+          const tAbbrev = (rawAbbr&&rawAbbr!=='?') ? rawAbbr : (ABBR_FROM_NAME[tName]||'');
           all.push({
-            name: t.team?.name||'?',
-            abbrev: t.team?.abbreviation||t.team?.abbrev||'?', abbrev2: t.team?.fileCode?.toUpperCase()||'',
+            name: tName,
+            abbrev: tAbbrev,
+            abbrev2: t.team?.fileCode?.toUpperCase()||'',
             w: t.wins, l: t.losses,
             pct: t.winningPercentage,
             gb: t.gamesBack,
@@ -1158,7 +1215,8 @@ function renderStatContent(){
       let msTag='';
       if(ms&&nr){const need=ms.milestone-nr.value;msTag='<span class="ms-tag'+(need<=0?' done':'')+'">'+((need>0)?need+' to '+ms.milestone:ms.milestone+' \u2713')+'</span>';}
       const nrRowId='lb-row-'+normName(p.player).replace(/\s+/g,'-');
-      const nrLogo=playerLogoImg(p.player,16);
+      const nrTeamAbbr=playerTeamAbbr(p.player)||team||'';
+      const nrLogo=nrTeamAbbr?teamLogoImgTag(nrTeamAbbr,16):'';
       return '<tr id="'+nrRowId+'" class="lb-row-mine lb-clickable" data-rowid="'+nrRowId+'" data-playername="'+encodeURIComponent(p.player)+'"><td class="rank" style="color:var(--text3)">NR</td><td style="display:flex;align-items:center;gap:6px;padding:7px 13px;">'+(nrLogo||'<span style="width:16px;flex-shrink:0;"></span>')+'<span class="dot" style="flex-shrink:0;"></span>'+p.player+injTag+msTag+'<span class="lb-expand-icon">&#x25B6;</span></td><td style="color:var(--text2);font-size:12px;width:46px">'+team+'</td><td class="lb-val" style="width:60px">'+val+'</td></tr>';
     }).join('');
 
@@ -1173,7 +1231,8 @@ function renderStatContent(){
     const rowId='lb-row-'+normName(l.name).replace(/\s+/g,'-');
     const expandIcon=hasBets?'<span class="lb-expand-icon">&#x25B6;</span>':'';
     const clickAttr=hasBets?' id="'+rowId+'" class="'+(isMine?'lb-row-mine ':'')+'lb-clickable" data-rowid="'+rowId+'" data-playername="'+encodeURIComponent(l.name)+'"':' class="'+(isMine?'lb-row-mine':'')+'"';
-    const lLogo=playerLogoImg(l.name,16);
+    const lTeam=playerTeamAbbr(l.name)||l.team||'';
+    const lLogo=lTeam?teamLogoImgTag(lTeam,16):'';
     return '<tr'+clickAttr+'><td class="rank">'+l.rank+'</td><td style="display:flex;align-items:center;gap:6px;padding:7px 13px;">'+(lLogo||'<span style="width:16px;flex-shrink:0;"></span>')+(isMine?'<span class="dot" style="flex-shrink:0;"></span>':'')+l.name+injTag+msTag+expandIcon+'</td><td style="color:var(--text2);font-size:12px;width:46px">'+l.team+'</td><td class="lb-val" style="width:60px">'+l.value+'</td></tr>';
   }).join('');
 
@@ -1211,14 +1270,21 @@ function renderRecords(el){
     }
     const isMine = MY_TEAM_BETS.some(b => teamMatches(b, t));
     const myBet  = MY_TEAM_BETS.find(b => teamMatches(b, t));
-    const recLogoImg = teamLogoImgTag(t.abbrev, 18);
+    // Derive abbreviation from name map since API often omits it
+    const recAbbr = t.abbrev||'';
+    const recLogoImg = recAbbr ? teamLogoImgTag(recAbbr, 20) : '';
+    const wl = (t.w!==undefined&&t.l!==undefined) ? t.w+'-'+t.l : '—';
+    const pct = (t.pct&&!isNaN(parseFloat(t.pct))) ? parseFloat(t.pct).toFixed(3) : '—';
     return '<tr class="'+(isMine?'rec-mine':'')+'">'
-      +'<td style="width:30px;font-size:12px;color:var(--text3);font-family:var(--mono)">'+(idx+1)+'</td>'
-      +'<td>'+recLogoImg+(isMine?'<span class="rec-dot"></span>':'')+t.name+'</td>'
-      +'<td style="width:46px;font-size:12px;color:var(--text2)">'+t.abbrev+'</td>'
-      +'<td style="width:60px;font-family:var(--mono);font-size:13px;font-weight:600;text-align:right">'+t.w+'-'+t.l+'</td>'
-      +'<td style="width:50px;font-family:var(--mono);font-size:12px;color:var(--text2);text-align:right">'+parseFloat(t.pct||0).toFixed(3)+'</td>'
-      +(isMine?'<td style="width:80px"><span class="db-badge">'+myBet.market+'</span></td>':'<td style="width:80px"></td>')
+      +'<td style="width:28px;font-size:12px;color:var(--text3);font-family:var(--mono);padding:8px 8px;">'+(idx+1)+'</td>'
+      +'<td style="padding:8px 8px;"><span style="display:inline-flex;align-items:center;gap:7px;">'
+        +recLogoImg
+        +(isMine?'<span class="rec-dot"></span>':'')
+        +'<span>'+t.name+'</span>'
+      +'</span></td>'
+      +'<td style="width:60px;font-family:var(--mono);font-size:13px;font-weight:600;text-align:right;padding:8px 8px;">'+wl+'</td>'
+      +'<td style="width:52px;font-family:var(--mono);font-size:12px;color:var(--text2);text-align:right;padding:8px 8px;">'+pct+'</td>'
+      +(isMine?'<td style="width:90px;padding:8px 8px;"><span class="db-badge">'+myBet.market+'</span></td>':'<td style="width:90px;"></td>')
       +'</tr>';
   }
 
@@ -1227,19 +1293,19 @@ function renderRecords(el){
     +'<div>'
       +'<div class="sec-lbl" style="margin-top:0">Best Records</div>'
       +'<div class="tbl-wrap"><table>'
-        +'<thead><tr><th style="width:30px">#</th><th>Team</th><th style="width:46px">ABV</th><th style="width:60px;text-align:right">W-L</th><th style="width:50px;text-align:right">PCT</th><th style="width:80px"></th></tr></thead>'
+        +'<thead><tr><th style="width:30px">#</th><th>Team</th><th style="width:60px;text-align:right">W-L</th><th style="width:50px;text-align:right">PCT</th><th style="width:80px"></th></tr></thead>'
         +'<tbody>'+standingsData.best.map((t,i)=>teamRow(t,i)).join('')+'</tbody>'
       +'</table></div>'
     +'</div>'
     +'<div>'
       +'<div class="sec-lbl" style="margin-top:0">Worst Records</div>'
       +'<div class="tbl-wrap"><table>'
-        +'<thead><tr><th style="width:30px">#</th><th>Team</th><th style="width:46px">ABV</th><th style="width:60px;text-align:right">W-L</th><th style="width:50px;text-align:right">PCT</th><th style="width:80px"></th></tr></thead>'
+        +'<thead><tr><th style="width:30px">#</th><th>Team</th><th style="width:60px;text-align:right">W-L</th><th style="width:50px;text-align:right">PCT</th><th style="width:80px"></th></tr></thead>'
         +'<tbody>'+standingsData.worst.map((t,i)=>teamRow(t,i)).join('')+'</tbody>'
       +'</table></div>'
     +'</div>'
     +'</div>'
-    +'<div style="margin-top:10px;font-size:12px;color:var(--text3);">Full standings across AL &amp; NL. Gold dot = your bet.</div>';
+    ;
 }
 
 // Summary sort state per category
@@ -1289,7 +1355,8 @@ function renderStatSummary(el) {
     }
 
     const tableRows = rows.map(r => {
-      const pLogo = playerLogoImg(r.player, 16);
+      const pTeamAbbr = playerTeamAbbr(r.player)||'';
+      const pLogo = pTeamAbbr ? teamLogoImgTag(pTeamAbbr,16) : '';
       return '<tr class="lb-row-mine">'
         + '<td style="display:flex;align-items:center;gap:6px;padding:7px 13px;">'+(pLogo||'<span style="width:16px;flex-shrink:0;"></span>')+r.player+r.injTag+'</td>'
         + '<td style="text-align:right;color:var(--text2);font-family:var(--mono);font-size:12px;width:60px">' + r.rankTxt + '</td>'
@@ -1740,7 +1807,8 @@ function renderDashboard() {
     const playerBets = bets.filter(b=>nameMatch(b.player,d.name)&&b.status!=='loss');
     const markets = [...new Set(playerBets.map(b=>b.market))];
     const mktStr = markets.join(' · ');
-    const dcLogo = playerLogoImg(d.name, 18);
+    const dcTeamAbbr = playerTeamAbbr(d.name)||'';
+    const dcLogo = dcTeamAbbr ? teamLogoImgTag(dcTeamAbbr,18) : '';
     return '<div class="daily-card '+cls+'">'
       +'<div style="display:flex;align-items:center;justify-content:space-between;gap:6px;">'
         +'<div style="display:flex;align-items:center;gap:7px;min-width:0;">'
@@ -1843,7 +1911,8 @@ function renderDashboard() {
           +playerArr.map((p,i)=>{
             const inj=isInjured(p.player);
             const injTag=inj?'<span class="inj-tag" style="font-size:9px;">IL</span>':'';
-            const dbLogo=playerLogoImg(p.player,15);
+            const dbTeamAbbr=playerTeamAbbr(p.player)||'';
+            const dbLogo=dbTeamAbbr?teamLogoImgTag(dbTeamAbbr,15):'';
             return '<li>'
               +'<span style="font-size:11px;color:var(--text3);width:16px;flex-shrink:0;">'+(i+1)+'</span>'
               +(dbLogo||'<span style="width:15px;flex-shrink:0;"></span>')
@@ -1903,10 +1972,10 @@ const TEAM_ABBREVS = {
 };
 
 const TEAM_COLORS = {
-  ARI:'#A71930',ATL:'#CE1141',BAL:'#DF4601',BOS:'#BD3039',CHC:'#0E3386',CWS:'#27251F',
+  ARI:'#A71930', AZ:'#A71930',ATL:'#CE1141',BAL:'#DF4601',BOS:'#BD3039',CHC:'#0E3386',CWS:'#27251F',
   CIN:'#C6011F',CLE:'#00385D',COL:'#33006F',DET:'#0C2340',HOU:'#002D62',KC:'#004687',
   LAA:'#BA0021',LAD:'#005A9C',MIA:'#00A3E0',MIL:'#FFC52F',MIN:'#002B5C',NYM:'#002D72',
-  NYY:'#003087',OAK:'#003831',PHI:'#E81828',PIT:'#FDB827',SD:'#2F241D',SF:'#FD5A1E',
+  NYY:'#003087',ATH:'#003831',OAK:'#003831',PHI:'#E81828',PIT:'#FDB827',SD:'#2F241D',SF:'#FD5A1E',
   SEA:'#0C2C56',TB:'#092C5C',TEX:'#003278',TOR:'#134A8E',WSH:'#AB0003'
 };
 
@@ -1925,17 +1994,18 @@ function toggleTickerPause(){
 // Hard overrides — beat live API data (use for known API errors / recent trades)
 const TEAM_OVERRIDES = {
   'will benson':'CIN',
+  'william benson':'CIN',
   'konnor griffin':'PIT',
 };
 
 const PLAYER_TEAM_MAP = {
   'jac caglianone':'KC','roman anthony':'BOS','cole ragans':'KC','gavin williams':'CLE',
   'logan gilbert':'SEA','gunnar henderson':'BAL','mike trout':'LAA','tarik skubal':'DET',
-  'kevin mcgonigle':'PHI','carter jensen':'KC','brent rooker':'OAK','bryan reynolds':'PIT',
+  'kevin mcgonigle':'PHI','carter jensen':'KC','brent rooker':'ATH','bryan reynolds':'PIT',
   'james wood':'WSH','jung hoo lee':'SF','rafael devers':'BOS','brendan donovan':'STL',
-  'jackson chourio':'MIL','jacob wilson':'OAK','wyatt langford':'TEX',
+  'jackson chourio':'MIL','jacob wilson':'ATH','wyatt langford':'TEX',
   'ronald acuna jr':'ATL','giancarlo stanton':'NYY','royce lewis':'MIN',
-  'nick kurtz':'OAK','kyle schwarber':'PHI','kyle tucker':'CHC',
+  'nick kurtz':'ATH','kyle schwarber':'PHI','kyle tucker':'CHC',
   'vinnie pasquantino':'KC','bobby witt jr':'KC','blake snell':'SF',
   'brandon woodruff':'MIL','chris sale':'ATL','christopher sanchez':'PHI',
   'trevor rogers':'MIA','yoshinobu yamamoto':'LAD','zack wheeler':'PHI',
@@ -1948,8 +2018,12 @@ const PLAYER_TEAM_MAP = {
 
 function playerTeamAbbr(name){
   const n = normName(name);
-  // 0. Hard overrides (beats API — use for known wrong API data)
+  // 0. Hard overrides (beats API — check both exact and partial name match)
   if(TEAM_OVERRIDES[n]) return TEAM_OVERRIDES[n];
+  // Also check if any override key is contained in n (handles 'William Benson' vs 'Will Benson')
+  for(const [k,v] of Object.entries(TEAM_OVERRIDES)){
+    if(n.includes(k)||k.includes(n)) return v;
+  }
   // 1. Live API data
   for(const cat of Object.values(apiData)){
     const found = cat.find(l=>nameMatch(l.name,name));
@@ -1966,18 +2040,18 @@ function playerTeamAbbr(name){
 // Team colors for local badge rendering — no external requests needed
 // MLB team IDs for mlbstatic CDN
 const MLB_TEAM_IDS = {
-  ARI:109,ATL:144,BAL:110,BOS:111,CHC:112,CWS:145,CIN:113,CLE:114,
+  ARI:109, AZ:109, ATL:144,BAL:110,BOS:111,CHC:112,CWS:145,CIN:113,CLE:114,
   COL:115,DET:116,HOU:117,KC:118,LAA:108,LAD:119,MIA:146,MIL:158,
-  MIN:142,NYM:121,NYY:147,OAK:133,ATH:133,PHI:143,PIT:134,SD:135,SF:137,
+  MIN:142,NYM:121,NYY:147,ATH:133,OAK:133,PHI:143,PIT:134,SD:135,SF:137,
   SEA:136,STL:138,TB:139,TEX:140,TOR:141,WSH:120
 };
 
 // Team fallback colors for when images fail
 const TEAM_COLORS_MAP = {
-  ARI:'#A71930',ATL:'#CE1141',BAL:'#DF4601',BOS:'#BD3039',CHC:'#0E3386',
+  ARI:'#A71930', AZ:'#A71930',ATL:'#CE1141',BAL:'#DF4601',BOS:'#BD3039',CHC:'#0E3386',
   CWS:'#27251F',CIN:'#C6011F',CLE:'#E31937',COL:'#33006F',DET:'#0C2340',
   HOU:'#002D62',KC:'#004687',LAA:'#BA0021',LAD:'#005A9C',MIA:'#00A3E0',
-  MIL:'#12284B',MIN:'#002B5C',NYM:'#002D72',NYY:'#003087',OAK:'#003831',
+  MIL:'#12284B',MIN:'#002B5C',NYM:'#002D72',NYY:'#003087',ATH:'#003831',OAK:'#003831',
   ATH:'#003831',PHI:'#E81828',PIT:'#27251F',SD:'#2F241D',SF:'#FD5A1E',
   SEA:'#0C2C56',STL:'#C41E3A',TB:'#092C5C',TEX:'#003278',TOR:'#134A8E',
   WSH:'#AB0003'
@@ -1988,6 +2062,7 @@ const TEAM_COLORS_MAP = {
 const LOGO_CACHE = {};
 const LOGO_SOURCES = {
   ARI:['https://www.mlbstatic.com/team-logos/109.svg','https://a.espncdn.com/i/teamlogos/mlb/500/ari.png','https://a.espncdn.com/i/teamlogos/mlb/500/dbacks.png','https://midfield.mlbstatic.com/v1/team/109/spots/512'],
+  AZ: ['https://www.mlbstatic.com/team-logos/109.svg','https://a.espncdn.com/i/teamlogos/mlb/500/ari.png','https://a.espncdn.com/i/teamlogos/mlb/500/dbacks.png','https://midfield.mlbstatic.com/v1/team/109/spots/512'],
   ATL:['https://www.mlbstatic.com/team-logos/144.svg','https://a.espncdn.com/i/teamlogos/mlb/500/atl.png'],
   BAL:['https://www.mlbstatic.com/team-logos/110.svg','https://a.espncdn.com/i/teamlogos/mlb/500/bal.png'],
   BOS:['https://www.mlbstatic.com/team-logos/111.svg','https://a.espncdn.com/i/teamlogos/mlb/500/bos.png'],
@@ -2006,8 +2081,8 @@ const LOGO_SOURCES = {
   MIN:['https://www.mlbstatic.com/team-logos/142.svg','https://a.espncdn.com/i/teamlogos/mlb/500/min.png'],
   NYM:['https://www.mlbstatic.com/team-logos/121.svg','https://a.espncdn.com/i/teamlogos/mlb/500/nym.png'],
   NYY:['https://www.mlbstatic.com/team-logos/147.svg','https://a.espncdn.com/i/teamlogos/mlb/500/nyy.png'],
-  OAK:['https://www.mlbstatic.com/team-logos/133.svg','https://a.espncdn.com/i/teamlogos/mlb/500/oak.png'],
   ATH:['https://www.mlbstatic.com/team-logos/133.svg','https://a.espncdn.com/i/teamlogos/mlb/500/oak.png'],
+  OAK:['https://www.mlbstatic.com/team-logos/133.svg','https://a.espncdn.com/i/teamlogos/mlb/500/oak.png'],
   PHI:['https://www.mlbstatic.com/team-logos/143.svg','https://a.espncdn.com/i/teamlogos/mlb/500/phi.png'],
   PIT:['https://www.mlbstatic.com/team-logos/134.svg','https://a.espncdn.com/i/teamlogos/mlb/500/pit.png'],
   SD: ['https://www.mlbstatic.com/team-logos/135.svg','https://a.espncdn.com/i/teamlogos/mlb/500/sd.png'],
@@ -2032,7 +2107,7 @@ function preloadLogos(){
       if(idx>=urls.length) return;
       const img = new Image();
       img.onload = function(){
-        if(this.naturalWidth>0) LOGO_CACHE[abbr]=urls[idx];
+        LOGO_CACHE[abbr]=urls[idx]; // SVGs always have naturalWidth=0, cache regardless
       };
       img.onerror = function(){
         idx++;
@@ -2042,6 +2117,13 @@ function preloadLogos(){
     }
     tryNext();
   });
+  // Re-render after logos load — covers all tabs
+  setTimeout(()=>{
+    renderDashboard();
+    const sc=document.getElementById('stat-content'); if(sc&&sc.innerHTML) renderStats();
+    const recEl=document.getElementById('stat-content');
+    if(recEl&&activeStatTab==='records') renderStats();
+  }, 2000);
 }
 
 window.mlbImgErr = function(el){
@@ -2063,7 +2145,7 @@ function teamLogoUrl(abbr){
 function teamLogoImgTag(abbr, size){
   const s    = size||18;
   const bg   = TEAM_COLORS_MAP[abbr]||'#444';
-  const label= abbr==='ATH'?'OAK':(abbr||'?');
+  const label= abbr||'?';
   const fs   = label.length>2 ? Math.round(s*0.33) : Math.round(s*0.38);
   const srcs = LOGO_SOURCES[abbr]||[];
   if(!srcs.length) return '<span style="width:'+s+'px;display:inline-block;flex-shrink:0;"></span>';
