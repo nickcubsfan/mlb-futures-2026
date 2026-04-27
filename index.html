@@ -662,10 +662,15 @@ const RAW_BETS = [
   {market:"NL Cy Young",player:"Sandy Alcantara",book:"Bovada",odds:"+2200",stake:30.00,toWin:660.00,status:"pending"},
   {market:"NL MVP",player:"Konnor Griffin",book:"Bet365",odds:"+10000",stake:10.00,toWin:1000.00,status:"pending"},
   {market:"AL Rookie of the Year",player:"Carter Jensen",book:"Fanatics",odds:"+1400",stake:60.00,toWin:840.00,status:"pending"},
+  {market:"MLB HR Leader",player:"Cal Raleigh",book:"FanDuel",odds:"+12500",stake:10.00,toWin:1250.00,status:"pending"},
+  {market:"AL Rookie of the Year",player:"Trey Yesavage",book:"Bet365",odds:"+5000",stake:20.00,toWin:1000.00,status:"pending"},
+  {market:"NL MVP",player:"Paul Skenes",book:"FanDuel",odds:"+10000",stake:15.00,toWin:1500.00,status:"pending"},
+  {market:"NL Cy Young",player:"Nolan McLean",book:"Caesars",odds:"+3500",stake:25.00,toWin:875.00,status:"pending"},
+  {market:"AL MVP",player:"Bobby Witt Jr.",book:"Straightslate",odds:"+1000",stake:100.00,toWin:1000.00,status:"pending"},
 ];
 
 // ── persistent state in localStorage ──
-const STORAGE_KEY = 'mlb2026_bets_v2';
+const STORAGE_KEY = 'mlb2026_bets_v3';
 function loadBets() {
   try { const s = localStorage.getItem(STORAGE_KEY); return s ? JSON.parse(s) : null; } catch(e){ return null; }
 }
@@ -884,6 +889,9 @@ const MY_PICKS = [
   {cat:'saves',player:'Jhoan Duran'},
   {cat:'runs',player:'Nick Kurtz'},
   {cat:'runs',player:'Roman Anthony'},
+  {cat:'homeRuns',player:'Cal Raleigh'},
+  {cat:'alRookie',player:'Trey Yesavage'},
+  {cat:'nlCyYoung',player:'Nolan McLean'},
 ];
 
 // Team bets for records section
@@ -2014,6 +2022,7 @@ const PLAYER_TEAM_MAP = {
   'xavier edwards':'MIA','eury perez':'MIA','shohei ohtani':'LAD',
   'paul skenes':'PIT','charlie condon':'COL','zac veen':'COL',
   'sandy alcantara':'MIA','bryce harper':'PHI','will benson':'CIN','wyatt langford':'TEX',
+  'cal raleigh':'SEA','trey yesavage':'NYY','nolan mclean':'OAK',
 };
 
 function playerTeamAbbr(name){
@@ -2287,4 +2296,3 @@ renderStats();
 </script>
 </body>
 </html>
-
