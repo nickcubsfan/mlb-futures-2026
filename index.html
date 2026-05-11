@@ -662,13 +662,15 @@ const RAW_BETS = [
   {market:"AL Rookie of the Year",player:"Carter Jensen",book:"Fanatics",odds:"+1400",stake:60.00,toWin:840.00,status:"pending"},
   {market:"MLB HR Leader",player:"Cal Raleigh",book:"FanDuel",odds:"+12500",stake:10.00,toWin:1250.00,status:"pending"},
   {market:"AL Rookie of the Year",player:"Trey Yesavage",book:"Bet365",odds:"+5000",stake:20.00,toWin:1000.00,status:"pending"},
+  {market:"NL MVP",player:"Paul Skenes",book:"The Score",odds:"+4000",stake:10.00,toWin:400.00,status:"pending"},
+  {market:"NL MVP",player:"Paul Skenes",book:"Hard Rock",odds:"+4000",stake:10.00,toWin:400.00,status:"pending"},
   {market:"NL MVP",player:"Paul Skenes",book:"FanDuel",odds:"+10000",stake:15.00,toWin:1500.00,status:"pending"},
   {market:"NL Cy Young",player:"Nolan McLean",book:"Caesars",odds:"+3500",stake:25.00,toWin:875.00,status:"pending"},
   {market:"AL MVP",player:"Bobby Witt Jr.",book:"Straightslate",odds:"+1000",stake:100.00,toWin:1000.00,status:"pending"},
 ];
 
 // ── persistent state in localStorage ──
-const STORAGE_KEY = 'mlb2026_bets_v3';
+const STORAGE_KEY = 'mlb2026_bets_v4';
 function loadBets() {
   try { const s = localStorage.getItem(STORAGE_KEY); return s ? JSON.parse(s) : null; } catch(e){ return null; }
 }
